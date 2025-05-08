@@ -260,13 +260,15 @@ class ChessVisionApp(QMainWindow):
 
         # Format the analysis results
         analysis_text = ""
+        arrows = []
+
         for i, analysis in enumerate(self.current_analysis):
-            if "score" in analysis and "pv" in analysis:
+            if "score" in analysis and "pv" in analysis and "moves" in analysis:
                 line_number = i + 1
                 score = analysis["score"]
-                moves = analysis["pv"].split()
+                moves = analysis["moves"]  # This is a list of SAN moves
 
-                # Limit the number of moves shown
+                # Limit the number of moves shown in text
                 if len(moves) > 5:
                     moves_text = " ".join(moves[:5]) + "..."
                 else:
@@ -274,8 +276,24 @@ class ChessVisionApp(QMainWindow):
 
                 analysis_text += f"Line {line_number}: {score} - {moves_text}\n"
 
+                # Add arrow for the first move of each line
+                if moves and i < 5:  # Limit to 5 arrows
+                    # Get the move from the analysis
+                    board = self.board_view.board.copy()
+
+                    # Find the move in UCI format
+                    for move in board.legal_moves:
+                        if board.san(move) == moves[0]:
+                            # Add arrow (from_square, to_square, color_index)
+                            arrows.append((move.from_square, move.to_square, i))
+                            break
+
+        # Update the analysis text
         if analysis_text:
             self.analysis_label.setText(analysis_text)
+
+        # Update the arrows on the board
+        self.board_view.set_arrows(arrows)
 
     def _on_depth_changed(self, depth):
         """Handle changes to the analysis depth."""

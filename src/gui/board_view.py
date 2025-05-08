@@ -6,8 +6,8 @@ This module provides a graphical representation of a chess board using PyQt5.
 
 import os
 import chess
-from PyQt5.QtCore import Qt, QSize, QRect, QPoint
-from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen
+from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QPointF
+from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QPolygonF
 from PyQt5.QtWidgets import QWidget
 
 
@@ -24,6 +24,15 @@ class ChessBoardView(QWidget):
     DARK_SQUARE_COLOR = QColor(181, 136, 99)    # Dark brown
     HIGHLIGHT_COLOR = QColor(106, 168, 79, 150)  # Green highlight for moves
     LAST_MOVE_COLOR = QColor(205, 210, 106, 150)  # Yellow highlight for last move
+
+    # Colors for arrows
+    ARROW_COLORS = [
+        QColor(255, 0, 0, 180),    # Red for best move
+        QColor(0, 0, 255, 180),    # Blue for second best
+        QColor(0, 128, 0, 180),    # Green for third best
+        QColor(128, 0, 128, 180),  # Purple for fourth best
+        QColor(255, 165, 0, 180)   # Orange for fifth best
+    ]
 
     # Piece image directory - we'll need to add these later
     PIECE_IMAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -46,6 +55,9 @@ class ChessBoardView(QWidget):
         # Set up highlighting
         self.highlighted_squares = []
         self.last_move_squares = []
+
+        # Set up arrows for best moves
+        self.arrows = []  # List of (from_square, to_square, color_index) tuples
 
         # Set up the widget
         self.setMinimumSize(self.board_size, self.board_size)
@@ -114,6 +126,17 @@ class ChessBoardView(QWidget):
         """Clear all highlighted squares."""
         self.highlighted_squares = []
         self.last_move_squares = []
+        self.arrows = []
+        self.update()
+
+    def set_arrows(self, arrows):
+        """
+        Set arrows to display on the board.
+
+        Args:
+            arrows: List of (from_square, to_square, color_index) tuples
+        """
+        self.arrows = arrows
         self.update()
 
     def square_at(self, point):
@@ -144,6 +167,9 @@ class ChessBoardView(QWidget):
 
         # Draw the pieces
         self._draw_pieces(painter)
+
+        # Draw the arrows
+        self._draw_arrows(painter)
 
     def _draw_board(self, painter):
         """Draw the chess board squares."""
@@ -210,3 +236,98 @@ class ChessBoardView(QWidget):
                     painter.setPen(color)
                     painter.drawText(QRect(x, y, self.square_size, self.square_size),
                                     Qt.AlignCenter, piece_symbol)
+
+    def _draw_arrows(self, painter):
+        """Draw arrows for best moves."""
+        if not self.arrows:
+            return
+
+        # Set up the arrow properties
+        arrow_width = self.square_size // 10
+        head_size = self.square_size // 4
+
+        for from_square, to_square, color_idx in self.arrows:
+            # Get the color for this arrow
+            color = self.ARROW_COLORS[color_idx % len(self.ARROW_COLORS)]
+
+            # Calculate the center points of the squares
+            from_file = chess.square_file(from_square)
+            from_rank = chess.square_rank(from_square)
+            to_file = chess.square_file(to_square)
+            to_rank = chess.square_rank(to_square)
+
+            # Calculate center coordinates
+            from_x = from_file * self.square_size + self.square_size // 2
+            from_y = (7 - from_rank) * self.square_size + self.square_size // 2
+            to_x = to_file * self.square_size + self.square_size // 2
+            to_y = (7 - to_rank) * self.square_size + self.square_size // 2
+
+            # Create points for the arrow
+            from_point = QPointF(from_x, from_y)
+            to_point = QPointF(to_x, to_y)
+
+            # Calculate the direction vector
+            dx = to_x - from_x
+            dy = to_y - from_y
+            length = (dx**2 + dy**2)**0.5
+
+            if length < 1e-6:  # Avoid division by zero
+                continue
+
+            # Normalize the direction vector
+            dx /= length
+            dy /= length
+
+            # Calculate perpendicular vector for arrow width
+            perpx = -dy
+            perpy = dx
+
+            # Shorten the arrow to not cover the pieces completely
+            from_point = QPointF(from_x + dx * self.square_size * 0.3, from_y + dy * self.square_size * 0.3)
+            to_point = QPointF(to_x - dx * self.square_size * 0.3, to_y - dy * self.square_size * 0.3)
+
+            # Recalculate with new points
+            dx = to_point.x() - from_point.x()
+            dy = to_point.y() - from_point.y()
+            length = (dx**2 + dy**2)**0.5
+
+            if length < 1e-6:  # Avoid division by zero
+                continue
+
+            # Normalize again
+            dx /= length
+            dy /= length
+
+            # Calculate the arrow shaft points
+            shaft_left_start = QPointF(from_point.x() + perpx * arrow_width, from_point.y() + perpy * arrow_width)
+            shaft_right_start = QPointF(from_point.x() - perpx * arrow_width, from_point.y() - perpy * arrow_width)
+
+            # Calculate where the arrowhead starts
+            head_base = QPointF(to_point.x() - dx * head_size, to_point.y() - dy * head_size)
+
+            # Calculate the arrowhead points
+            shaft_left_end = QPointF(head_base.x() + perpx * arrow_width, head_base.y() + perpy * arrow_width)
+            shaft_right_end = QPointF(head_base.x() - perpx * arrow_width, head_base.y() - perpy * arrow_width)
+
+            # Calculate the arrowhead side points
+            head_left = QPointF(head_base.x() + perpx * head_size, head_base.y() + perpy * head_size)
+            head_right = QPointF(head_base.x() - perpx * head_size, head_base.y() - perpy * head_size)
+
+            # Create polygons for the arrow
+            shaft_polygon = QPolygonF()
+            shaft_polygon.append(shaft_left_start)
+            shaft_polygon.append(shaft_left_end)
+            shaft_polygon.append(shaft_right_end)
+            shaft_polygon.append(shaft_right_start)
+
+            head_polygon = QPolygonF()
+            head_polygon.append(head_left)
+            head_polygon.append(to_point)
+            head_polygon.append(head_right)
+            head_polygon.append(head_base)
+
+            # Draw the arrow
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(color)
+            painter.drawPolygon(shaft_polygon)
+            painter.drawPolygon(head_polygon)
