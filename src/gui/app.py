@@ -12,13 +12,14 @@ import time
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit, QGroupBox, QGridLayout, QFileDialog,
-    QComboBox, QSpinBox, QMessageBox
+    QPushButton, QLabel, QLineEdit, QGroupBox, QSpinBox, QMessageBox
 )
 
 from src.gui.board_view import ChessBoardView
 from src.chess.engine import StockfishEngine
 from src.screen.selector import select_screen_region, save_selection, load_selection
+from src.detection.detector import ChessPieceDetector
+from src.detection.fen_generator import FENGenerator
 
 
 class ChessVisionApp(QMainWindow):
@@ -56,6 +57,18 @@ class ChessVisionApp(QMainWindow):
         self.selection_file = os.path.join(self.config_dir, "screen_selection.json")
         self.screen_selection = load_selection(self.selection_file)
 
+        # Initialize the detector and FEN generator
+        self.detector = ChessPieceDetector()
+        self.fen_generator = FENGenerator()
+
+        # Set up detection variables
+        self.detection_running = False
+        self.detection_thread = None
+        self.current_detections = []
+        self.current_image = None
+        self.last_fen = None
+        self.pending_fen = None
+
         # Create the control panel
         self.control_panel = self._create_control_panel()
 
@@ -68,7 +81,7 @@ class ChessVisionApp(QMainWindow):
 
         # Set up a timer for periodic UI updates
         self.update_timer = QTimer(self)
-        self.update_timer.timeout.connect(self._update_analysis_display)
+        self.update_timer.timeout.connect(self._update_ui)
         self.update_timer.start(500)  # Update every 500ms
 
         # Analysis results
@@ -202,11 +215,28 @@ class ChessVisionApp(QMainWindow):
         screen_layout.addWidget(self.selection_label)
         screen_layout.addWidget(select_button)
 
+        # Detection group
+        detection_group = QGroupBox("Detection")
+        detection_layout = QVBoxLayout(detection_group)
+        detection_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+
+        # Detection status
+        self.detection_label = QLabel("Detection not running")
+
+        # Start/stop detection button
+        self.detection_button = QPushButton("Start Detection")
+        self.detection_button.clicked.connect(self._on_toggle_detection)
+
+        # Add widgets to detection layout
+        detection_layout.addWidget(self.detection_label)
+        detection_layout.addWidget(self.detection_button)
+
         # Add groups to main layout
         layout.addWidget(position_group)
         layout.addWidget(analysis_group)
         layout.addWidget(history_group)
         layout.addWidget(screen_group)
+        layout.addWidget(detection_group)
         layout.addStretch(1)
 
         # Set a fixed width for the panel
@@ -217,9 +247,18 @@ class ChessVisionApp(QMainWindow):
     def _on_set_position(self):
         """Handle the Set Position button click."""
         fen = self.fen_input.text()
-        success = self.board_view.set_board_from_fen(fen)
+        print(f"Setting position from FEN: {fen}")
 
-        if not success:
+        try:
+            # Validate the FEN by creating a board from it
+            _ = chess.Board(fen)
+
+            # Use our direct update method
+            self._direct_update_board(fen)
+
+            print(f"Successfully set position from FEN: {fen}")
+        except Exception as e:
+            print(f"Failed to set position from FEN: {fen}, error: {e}")
             self.fen_input.setText(self.board_view.board.fen())
 
     def _on_reset(self):
@@ -279,6 +318,34 @@ class ChessVisionApp(QMainWindow):
             # Sleep to avoid excessive CPU usage
             time.sleep(0.5)
 
+    def _update_ui(self):
+        """Update the UI with the latest data."""
+        # Update the analysis display
+        self._update_analysis_display()
+
+        # Update the detection label
+        self._update_detection_label()
+
+        # Check if there's a pending FEN update
+        if self.pending_fen:
+            # Get the FEN and clear the pending update
+            fen = self.pending_fen
+            self.pending_fen = None
+
+            # Update the board with the FEN
+            self._direct_update_board(fen)
+
+    def _update_detection_label(self):
+        """Update the detection label with the latest status."""
+        if not self.detection_running:
+            return
+
+        # Update the detection label with the number of detected pieces
+        if self.current_detections:
+            self.detection_label.setText(f"Detected {len(self.current_detections)} pieces")
+        else:
+            self.detection_label.setText("Detecting...")
+
     def _update_analysis_display(self):
         """Update the analysis display with the latest results."""
         if not self.is_analyzing or not self.current_analysis:
@@ -336,6 +403,11 @@ class ChessVisionApp(QMainWindow):
         if was_analyzing:
             self._on_toggle_analysis()
 
+        # Stop detection if it's running
+        was_detecting = self.detection_running
+        if was_detecting:
+            self._on_toggle_detection()
+
         # Minimize the main window temporarily
         self.showMinimized()
 
@@ -358,6 +430,9 @@ class ChessVisionApp(QMainWindow):
             # Save the selection
             save_selection(selection, self.selection_file)
 
+            # Update the detector with the new selection
+            self.detector.set_screen_region(selection)
+
             # Show a confirmation message
             QMessageBox.information(
                 self,
@@ -369,10 +444,17 @@ class ChessVisionApp(QMainWindow):
             if was_analyzing:
                 self._on_toggle_analysis()
 
+            # Restart detection if it was running
+            if was_detecting:
+                self._on_toggle_detection()
+
     def update_from_fen(self, fen):
         """Update the board from a FEN string."""
-        self.fen_input.setText(fen)
-        self._on_set_position()
+        print(f"Updating board with FEN: {fen}")
+
+        # Use the direct update method
+        self._direct_update_board(fen)
+        return True
 
     def add_move_to_history(self, move_san):
         """Add a move to the history display."""
@@ -383,10 +465,166 @@ class ChessVisionApp(QMainWindow):
         else:
             self.history_label.setText(f"{current_text}, {move_san}")
 
+    def _on_toggle_detection(self):
+        """Toggle detection on/off."""
+        self.detection_running = not self.detection_running
+
+        if self.detection_running:
+            # Check if a screen region is selected
+            if self.screen_selection is None:
+                QMessageBox.warning(
+                    self,
+                    "No Region Selected",
+                    "Please select a chess board region first."
+                )
+                self.detection_running = False
+                return
+
+            # Update the button text
+            self.detection_button.setText("Stop Detection")
+
+            # Update the detector with the screen region
+            self.detector.set_screen_region(self.screen_selection)
+
+            # Start the detection thread
+            self._start_detection()
+        else:
+            # Update the button text
+            self.detection_button.setText("Start Detection")
+
+            # Stop the detection thread
+            self._stop_detection()
+
+            # Update the detection label
+            self.detection_label.setText("Detection stopped")
+
+    def _start_detection(self):
+        """Start the detection thread."""
+        # Start the detection thread
+        self.detection_running = True
+        self.detection_thread = threading.Thread(target=self._detection_worker)
+        self.detection_thread.daemon = True
+        self.detection_thread.start()
+
+    def _stop_detection(self):
+        """Stop the detection thread."""
+        self.detection_running = False
+        if self.detection_thread is not None:
+            self.detection_thread.join(timeout=1.0)
+            self.detection_thread = None
+
+    def _detection_worker(self):
+        """Worker function for the detection thread."""
+        while self.detection_running:
+            # Capture and detect
+            img, detections = self.detector.detect()
+
+            if img is not None and detections:
+                # Save the current image and detections
+                self.current_image = img
+                self.current_detections = detections
+
+                # Generate FEN
+                fen = self.fen_generator.generate_fen(detections)
+
+                # Print debug info
+                print(f"Detected {len(detections)} pieces")
+                print(f"Generated FEN: {fen}")
+
+                # Validate and update the board with the FEN
+                try:
+                    # Validate the FEN by creating a board from it
+                    _ = chess.Board(fen)  # Just validate, we don't need the board object
+
+                    # If the FEN has changed, update the board
+                    if fen != self.last_fen:
+                        self.last_fen = fen
+                        print(f"FEN changed, updating board: {fen}")
+
+                        # Store the FEN to be processed in the main thread
+                        # We'll use a direct approach to update the board
+                        self.pending_fen = fen
+
+                except Exception as e:
+                    print(f"Invalid FEN generated: {fen}, error: {e}")
+
+            # Sleep to avoid excessive CPU usage
+            time.sleep(0.1)
+
+    def _direct_update_board(self, fen):
+        """
+        Directly update the board from a FEN string.
+
+        This method is designed to be called from the main UI thread
+        to update the board with a new FEN string.
+        """
+        print(f"Directly updating board with FEN: {fen}")
+
+        try:
+            # Create a new board from the FEN
+            new_board = chess.Board(fen)
+
+            # Use the set_board method to update the board
+            self.board_view.set_board(new_board)
+
+            # Update the FEN input field
+            self.fen_input.setText(fen)
+
+            print(f"Board directly updated with FEN: {fen}")
+        except Exception as e:
+            print(f"Error directly updating board: {e}")
+
+    def _safe_update_board(self, fen):
+        """
+        Safely update the board from a FEN string.
+
+        This method is designed to be called from a QTimer.singleShot to avoid
+        recursive repaint issues when updating the board from a background thread.
+        """
+        print(f"Safely updating board with FEN: {fen}")
+
+        try:
+            # Create a new board from the FEN
+            new_board = chess.Board(fen)
+
+            # Use the set_board method instead of directly setting the board property
+            self.board_view.set_board(new_board)
+
+            # Update the FEN input field
+            self.fen_input.setText(fen)
+
+            # Force the application to process events to ensure the UI updates
+            QApplication.processEvents()
+
+            print(f"Board safely updated with FEN: {fen}")
+        except Exception as e:
+            print(f"Error safely updating board: {e}")
+
+    def _update_board_in_gui(self, board, fen):
+        """Update the board in the GUI thread."""
+        print(f"Updating board in GUI thread with FEN: {fen}")
+
+        try:
+            # Use the set_board method instead of directly setting the board property
+            self.board_view.set_board(board)
+
+            # Update the FEN input field
+            self.fen_input.setText(fen)
+
+            # Force the application to process events to ensure the UI updates
+            QApplication.processEvents()
+
+            print(f"Board updated in GUI thread with FEN: {fen}")
+        except Exception as e:
+            print(f"Error updating board in GUI thread: {e}")
+
     def closeEvent(self, event):
         """Handle the window close event."""
         # Stop the analysis thread
         self._stop_analysis()
+
+        # Stop the detection thread
+        self._stop_detection()
 
         # Stop the engine
         if self.engine is not None:
