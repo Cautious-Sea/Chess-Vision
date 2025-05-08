@@ -7,13 +7,17 @@ This module provides the main application window for the Chess Vision applicatio
 import os
 import sys
 import chess
+import threading
+import time
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit, QGroupBox, QGridLayout, QFileDialog
+    QPushButton, QLabel, QLineEdit, QGroupBox, QGridLayout, QFileDialog,
+    QComboBox, QSpinBox
 )
 
 from src.gui.board_view import ChessBoardView
+from src.chess.engine import StockfishEngine
 
 
 class ChessVisionApp(QMainWindow):
@@ -40,6 +44,12 @@ class ChessVisionApp(QMainWindow):
         # Create the board view
         self.board_view = ChessBoardView()
 
+        # Initialize the Stockfish engine
+        self.engine = StockfishEngine(depth=15)
+        self.is_analyzing = False
+        self.analysis_thread = None
+        self.analysis_running = False
+
         # Create the control panel
         self.control_panel = self._create_control_panel()
 
@@ -49,6 +59,14 @@ class ChessVisionApp(QMainWindow):
 
         # Set up the board with the initial position
         self.board_view.set_board(chess.Board())
+
+        # Set up a timer for periodic UI updates
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self._update_analysis_display)
+        self.update_timer.start(500)  # Update every 500ms
+
+        # Analysis results
+        self.current_analysis = []
 
     def _create_control_panel(self):
         """Create the control panel widget."""
@@ -100,21 +118,49 @@ class ChessVisionApp(QMainWindow):
         analysis_group = QGroupBox("Analysis")
         analysis_layout = QVBoxLayout(analysis_group)
         analysis_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+        analysis_layout.setSpacing(3)  # Reduce spacing
 
         # Analysis display
         self.analysis_label = QLabel("No analysis available")
         self.analysis_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.analysis_label.setWordWrap(True)
-        self.analysis_label.setMinimumHeight(80)  # Reduced height
+        self.analysis_label.setMinimumHeight(100)  # Increased height a bit
+
+        # Analysis options
+        options_layout = QHBoxLayout()
+        options_layout.setSpacing(3)
+
+        # Depth selection
+        depth_label = QLabel("Depth:")
+        self.depth_spin = QSpinBox()
+        self.depth_spin.setRange(1, 30)
+        self.depth_spin.setValue(15)
+        self.depth_spin.setMaximumWidth(50)
+        self.depth_spin.valueChanged.connect(self._on_depth_changed)
+
+        # Lines selection
+        lines_label = QLabel("Lines:")
+        self.lines_spin = QSpinBox()
+        self.lines_spin.setRange(1, 5)
+        self.lines_spin.setValue(1)
+        self.lines_spin.setMaximumWidth(50)
+        self.lines_spin.valueChanged.connect(self._on_lines_changed)
+
+        # Add to options layout
+        options_layout.addWidget(depth_label)
+        options_layout.addWidget(self.depth_spin)
+        options_layout.addWidget(lines_label)
+        options_layout.addWidget(self.lines_spin)
+        options_layout.addStretch(1)
 
         # Start/stop analysis button
         self.analysis_button = QPushButton("Start Analysis")
         self.analysis_button.clicked.connect(self._on_toggle_analysis)
         self.analysis_button.setMaximumWidth(100)
-        self.is_analyzing = False
 
         # Add widgets to analysis layout
         analysis_layout.addWidget(self.analysis_label)
+        analysis_layout.addLayout(options_layout)
         analysis_layout.addWidget(self.analysis_button, 0, Qt.AlignLeft)  # Align left
 
         # Move history group
@@ -162,11 +208,82 @@ class ChessVisionApp(QMainWindow):
 
         if self.is_analyzing:
             self.analysis_button.setText("Stop Analysis")
-            # In a real implementation, we would start the Stockfish engine here
-            self.analysis_label.setText("Analysis would start here...\nBest move: e2e4\nEvaluation: +0.3")
+            self._start_analysis()
         else:
             self.analysis_button.setText("Start Analysis")
+            self._stop_analysis()
             self.analysis_label.setText("Analysis stopped")
+
+    def _start_analysis(self):
+        """Start the analysis thread."""
+        if not self.engine.is_running():
+            success = self.engine.start()
+            if not success:
+                self.analysis_label.setText("Error: Could not start Stockfish engine")
+                self.is_analyzing = False
+                self.analysis_button.setText("Start Analysis")
+                return
+
+        # Start the analysis thread
+        self.analysis_running = True
+        self.analysis_thread = threading.Thread(target=self._analysis_worker)
+        self.analysis_thread.daemon = True
+        self.analysis_thread.start()
+
+    def _stop_analysis(self):
+        """Stop the analysis thread."""
+        self.analysis_running = False
+        if self.analysis_thread is not None:
+            self.analysis_thread.join(timeout=1.0)
+            self.analysis_thread = None
+
+    def _analysis_worker(self):
+        """Worker function for the analysis thread."""
+        while self.analysis_running:
+            # Get the current board position
+            board = self.board_view.board
+
+            # Analyze the position
+            try:
+                self.current_analysis = self.engine.analyze(board, limit_time=0.1)
+            except Exception as e:
+                print(f"Analysis error: {e}")
+                self.current_analysis = []
+
+            # Sleep to avoid excessive CPU usage
+            time.sleep(0.5)
+
+    def _update_analysis_display(self):
+        """Update the analysis display with the latest results."""
+        if not self.is_analyzing or not self.current_analysis:
+            return
+
+        # Format the analysis results
+        analysis_text = ""
+        for i, analysis in enumerate(self.current_analysis):
+            if "score" in analysis and "pv" in analysis:
+                line_number = i + 1
+                score = analysis["score"]
+                moves = analysis["pv"].split()
+
+                # Limit the number of moves shown
+                if len(moves) > 5:
+                    moves_text = " ".join(moves[:5]) + "..."
+                else:
+                    moves_text = " ".join(moves)
+
+                analysis_text += f"Line {line_number}: {score} - {moves_text}\n"
+
+        if analysis_text:
+            self.analysis_label.setText(analysis_text)
+
+    def _on_depth_changed(self, depth):
+        """Handle changes to the analysis depth."""
+        self.engine.set_depth(depth)
+
+    def _on_lines_changed(self, lines):
+        """Handle changes to the number of analysis lines."""
+        self.engine.set_multipv(lines)
 
     def update_from_fen(self, fen):
         """Update the board from a FEN string."""
@@ -181,6 +298,18 @@ class ChessVisionApp(QMainWindow):
             self.history_label.setText(move_san)
         else:
             self.history_label.setText(f"{current_text}, {move_san}")
+
+    def closeEvent(self, event):
+        """Handle the window close event."""
+        # Stop the analysis thread
+        self._stop_analysis()
+
+        # Stop the engine
+        if self.engine is not None:
+            self.engine.stop()
+
+        # Accept the close event
+        event.accept()
 
 
 def main():
