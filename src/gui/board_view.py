@@ -6,8 +6,8 @@ This module provides a graphical representation of a chess board using PyQt5.
 
 import os
 import chess
-from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QPointF
-from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QPolygonF
+from PyQt5.QtCore import Qt, QSize, QRect, QPointF
+from PyQt5.QtGui import QPainter, QColor, QPixmap, QPolygonF
 from PyQt5.QtWidgets import QWidget
 
 
@@ -102,11 +102,31 @@ class ChessBoardView(QWidget):
     def set_board_from_fen(self, fen):
         """Set the chess board from a FEN string."""
         try:
-            self.board = chess.Board(fen)
+            # Validate the FEN string
+            if not fen or not isinstance(fen, str):
+                print(f"Invalid FEN: {fen}")
+                return False
+
+            # Try to create a board from the FEN
+            new_board = chess.Board(fen)
+
+            # If successful, update the board
+            self.board = new_board
+
+            # Clear any highlights or arrows
+            self.highlighted_squares = []
+            self.last_move_squares = []
+            self.arrows = []
+
+            # Trigger a repaint
             self.update()
+
             return True
         except ValueError as e:
             print(f"Error setting board from FEN: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error setting board from FEN: {e}")
             return False
 
     def highlight_squares(self, squares):
