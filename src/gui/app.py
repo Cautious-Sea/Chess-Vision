@@ -231,9 +231,14 @@ class ChessVisionApp(QMainWindow):
         self.detection_button = QPushButton("Start Detection")
         self.detection_button.clicked.connect(self._on_toggle_detection)
 
+        # Reset to detected position button
+        reset_to_detected_button = QPushButton("Reset to Detected Position")
+        reset_to_detected_button.clicked.connect(self._on_reset_to_detected)
+
         # Add widgets to detection layout
         detection_layout.addWidget(self.detection_label)
         detection_layout.addWidget(self.detection_button)
+        detection_layout.addWidget(reset_to_detected_button)
 
         # Board Controls group
         board_controls_group = QGroupBox("Board Controls")
@@ -480,6 +485,51 @@ class ChessVisionApp(QMainWindow):
             # Set black to move
             self.board_view.set_turn(False)
             print("Turn set to Black")
+
+    def _on_reset_to_detected(self):
+        """Reset the board to the latest detected position."""
+        if self.last_fen:
+            print(f"Resetting to detected position: {self.last_fen}")
+
+            try:
+                # Create a new board from the FEN
+                new_board = chess.Board(self.last_fen)
+
+                # Update the previous board state
+                self.previous_board = new_board.copy()
+
+                # Update the board view
+                self.board_view.set_board(new_board)
+
+                # Update the FEN input field
+                self.fen_input.setText(self.last_fen)
+
+                # Reset the move history
+                self.history_label.setText("No moves yet")
+
+                # Update the turn radio buttons
+                self._update_turn_radio_buttons()
+
+                # Show a confirmation message
+                QMessageBox.information(
+                    self,
+                    "Position Reset",
+                    "Board has been reset to the latest detected position."
+                )
+            except Exception as e:
+                print(f"Error resetting to detected position: {e}")
+                QMessageBox.warning(
+                    self,
+                    "Reset Failed",
+                    f"Failed to reset to detected position: {e}"
+                )
+        else:
+            print("No detected position available")
+            QMessageBox.warning(
+                self,
+                "No Position Available",
+                "No detected position is available. Start detection first."
+            )
 
     def _on_select_board(self):
         """Handle the Select Chess Board button click."""
