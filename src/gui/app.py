@@ -12,7 +12,8 @@ import time
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit, QGroupBox, QSpinBox, QMessageBox
+    QPushButton, QLabel, QLineEdit, QGroupBox, QSpinBox, QMessageBox,
+    QRadioButton
 )
 
 from src.gui.board_view import ChessBoardView
@@ -68,6 +69,9 @@ class ChessVisionApp(QMainWindow):
         self.current_image = None
         self.last_fen = None
         self.pending_fen = None
+
+        # Set up board state tracking
+        self.previous_board = chess.Board()  # Track the previous board state
 
         # Create the control panel
         self.control_panel = self._create_control_panel()
@@ -231,8 +235,40 @@ class ChessVisionApp(QMainWindow):
         detection_layout.addWidget(self.detection_label)
         detection_layout.addWidget(self.detection_button)
 
+        # Board Controls group
+        board_controls_group = QGroupBox("Board Controls")
+        board_controls_layout = QVBoxLayout(board_controls_group)
+        board_controls_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+
+        # Flip board button
+        flip_board_button = QPushButton("Flip Board")
+        flip_board_button.clicked.connect(self._on_flip_board)
+
+        # Turn selector
+        turn_layout = QHBoxLayout()
+        turn_label = QLabel("Turn:")
+
+        # Create radio buttons for white and black
+        self.white_turn_radio = QRadioButton("White")
+        self.black_turn_radio = QRadioButton("Black")
+        self.white_turn_radio.setChecked(True)  # White moves first by default
+
+        # Connect radio buttons to handler
+        self.white_turn_radio.toggled.connect(self._on_turn_changed)
+        self.black_turn_radio.toggled.connect(self._on_turn_changed)
+
+        # Add radio buttons to layout
+        turn_layout.addWidget(turn_label)
+        turn_layout.addWidget(self.white_turn_radio)
+        turn_layout.addWidget(self.black_turn_radio)
+
+        # Add widgets to board controls layout
+        board_controls_layout.addWidget(flip_board_button)
+        board_controls_layout.addLayout(turn_layout)
+
         # Add groups to main layout
         layout.addWidget(position_group)
+        layout.addWidget(board_controls_group)
         layout.addWidget(analysis_group)
         layout.addWidget(history_group)
         layout.addWidget(screen_group)
@@ -250,11 +286,23 @@ class ChessVisionApp(QMainWindow):
         print(f"Setting position from FEN: {fen}")
 
         try:
-            # Validate the FEN by creating a board from it
-            _ = chess.Board(fen)
+            # Create a new board from the FEN
+            new_board = chess.Board(fen)
 
-            # Use our direct update method
-            self._direct_update_board(fen)
+            # Update the previous board state
+            self.previous_board = new_board.copy()
+
+            # Update the board view
+            self.board_view.set_board(new_board)
+
+            # Update the FEN input field
+            self.fen_input.setText(fen)
+
+            # Reset the move history
+            self.history_label.setText("No moves yet")
+
+            # Update the turn radio buttons
+            self._update_turn_radio_buttons()
 
             print(f"Successfully set position from FEN: {fen}")
         except Exception as e:
@@ -263,9 +311,23 @@ class ChessVisionApp(QMainWindow):
 
     def _on_reset(self):
         """Handle the Reset button click."""
-        self.board_view.set_board(chess.Board())
+        # Create a new board with the starting position
+        new_board = chess.Board()
+
+        # Update the previous board state
+        self.previous_board = new_board.copy()
+
+        # Update the board view
+        self.board_view.set_board(new_board)
+
+        # Update the FEN input field
         self.fen_input.setText(chess.STARTING_FEN)
+
+        # Reset the move history
         self.history_label.setText("No moves yet")
+
+        # Update the turn radio buttons
+        self._update_turn_radio_buttons()
 
     def _on_toggle_analysis(self):
         """Toggle analysis on/off."""
@@ -396,6 +458,29 @@ class ChessVisionApp(QMainWindow):
         """Handle changes to the number of analysis lines."""
         self.engine.set_multipv(lines)
 
+    def _on_flip_board(self):
+        """Handle the Flip Board button click."""
+        # Flip the board
+        flipped = self.board_view.flip_board()
+
+        # Update the UI to reflect the new board orientation
+        if flipped:
+            print("Board flipped: Black pieces at bottom")
+        else:
+            print("Board flipped: White pieces at bottom")
+
+    def _on_turn_changed(self):
+        """Handle changes to the turn selector."""
+        # Check which radio button is checked
+        if self.white_turn_radio.isChecked():
+            # Set white to move
+            self.board_view.set_turn(True)
+            print("Turn set to White")
+        else:
+            # Set black to move
+            self.board_view.set_turn(False)
+            print("Turn set to Black")
+
     def _on_select_board(self):
         """Handle the Select Chess Board button click."""
         # Stop analysis if it's running
@@ -452,9 +537,49 @@ class ChessVisionApp(QMainWindow):
         """Update the board from a FEN string."""
         print(f"Updating board with FEN: {fen}")
 
-        # Use the direct update method
-        self._direct_update_board(fen)
-        return True
+        try:
+            # Create a new board from the FEN
+            new_board = chess.Board(fen)
+
+            # Try to find what move was made
+            move = self._find_move_between_positions(self.previous_board, new_board)
+
+            if move:
+                # A move was found, apply it to the previous board
+                print(f"Detected move: {self.previous_board.san(move)}")
+
+                # Make the move on the previous board
+                self.previous_board.push(move)
+
+                # Use the updated previous board (which has the correct turn)
+                self.board_view.set_board(self.previous_board)
+
+                # Add the move to the history
+                self.add_move_to_history(self.previous_board.san(move))
+
+                # Update the FEN input field with the current board FEN
+                self.fen_input.setText(self.previous_board.fen())
+
+                print(f"Board updated with move: {self.previous_board.san(move)}")
+            else:
+                # No move was found, just set the board directly
+                print("No move detected, setting board directly")
+
+                # Update the previous board
+                self.previous_board = new_board.copy()
+
+                # Use the set_board method to update the board
+                self.board_view.set_board(new_board)
+
+                # Update the FEN input field
+                self.fen_input.setText(fen)
+
+                print(f"Board directly updated with FEN: {fen}")
+
+            return True
+        except Exception as e:
+            print(f"Error updating board with FEN: {fen}, error: {e}")
+            return False
 
     def add_move_to_history(self, move_san):
         """Add a move to the history display."""
@@ -557,6 +682,10 @@ class ChessVisionApp(QMainWindow):
 
         This method is designed to be called from the main UI thread
         to update the board with a new FEN string.
+
+        It calculates what move was made by comparing the new position
+        with the previous position, and applies that move to ensure
+        the turn information is correctly updated.
         """
         print(f"Directly updating board with FEN: {fen}")
 
@@ -564,13 +693,46 @@ class ChessVisionApp(QMainWindow):
             # Create a new board from the FEN
             new_board = chess.Board(fen)
 
-            # Use the set_board method to update the board
-            self.board_view.set_board(new_board)
+            # Try to find what move was made
+            move = self._find_move_between_positions(self.previous_board, new_board)
 
-            # Update the FEN input field
-            self.fen_input.setText(fen)
+            if move:
+                # A move was found, apply it to the previous board
+                print(f"Detected move: {self.previous_board.san(move)}")
 
-            print(f"Board directly updated with FEN: {fen}")
+                # Make the move on the previous board
+                self.previous_board.push(move)
+
+                # Use the updated previous board (which has the correct turn)
+                self.board_view.set_board(self.previous_board)
+
+                # Add the move to the history
+                self.add_move_to_history(self.previous_board.san(move))
+
+                # Update the FEN input field with the current board FEN
+                self.fen_input.setText(self.previous_board.fen())
+
+                # Update the turn radio buttons
+                self._update_turn_radio_buttons()
+
+                print(f"Board updated with move: {self.previous_board.san(move)}")
+            else:
+                # No move was found, just set the board directly
+                print("No move detected, setting board directly")
+
+                # Update the previous board
+                self.previous_board = new_board.copy()
+
+                # Use the set_board method to update the board
+                self.board_view.set_board(new_board)
+
+                # Update the FEN input field
+                self.fen_input.setText(fen)
+
+                # Update the turn radio buttons
+                self._update_turn_radio_buttons()
+
+                print(f"Board directly updated with FEN: {fen}")
         except Exception as e:
             print(f"Error directly updating board: {e}")
 
@@ -617,6 +779,52 @@ class ChessVisionApp(QMainWindow):
             print(f"Board updated in GUI thread with FEN: {fen}")
         except Exception as e:
             print(f"Error updating board in GUI thread: {e}")
+
+    def _find_move_between_positions(self, previous_board, new_board):
+        """
+        Find the move that was made between two board positions.
+
+        Args:
+            previous_board: The previous board position
+            new_board: The new board position
+
+        Returns:
+            The move that was made, or None if no move could be determined
+        """
+        # Check if it's a legal move from the previous position
+        for move in previous_board.legal_moves:
+            # Create a copy of the previous board
+            test_board = previous_board.copy()
+
+            # Apply the move
+            test_board.push(move)
+
+            # Compare the resulting position with the new board
+            # We only compare the piece placement part of the FEN
+            if test_board.board_fen() == new_board.board_fen():
+                return move
+
+        # No matching move found
+        return None
+
+    def _update_turn_radio_buttons(self):
+        """Update the turn radio buttons based on the current board state."""
+        # Get the current turn from the board
+        is_white_turn = self.board_view.board.turn
+
+        # Update the radio buttons without triggering the event handler
+        self.white_turn_radio.blockSignals(True)
+        self.black_turn_radio.blockSignals(True)
+
+        if is_white_turn:
+            self.white_turn_radio.setChecked(True)
+            self.black_turn_radio.setChecked(False)
+        else:
+            self.white_turn_radio.setChecked(False)
+            self.black_turn_radio.setChecked(True)
+
+        self.white_turn_radio.blockSignals(False)
+        self.black_turn_radio.blockSignals(False)
 
     def closeEvent(self, event):
         """Handle the window close event."""

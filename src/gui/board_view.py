@@ -59,6 +59,9 @@ class ChessBoardView(QWidget):
         # Set up arrows for best moves
         self.arrows = []  # List of (from_square, to_square, color_index) tuples
 
+        # Set up board orientation (False = white at bottom, True = black at bottom)
+        self.flipped = False
+
         # Set up the widget
         self.setMinimumSize(self.board_size, self.board_size)
         self.setMaximumSize(self.board_size, self.board_size)
@@ -167,12 +170,44 @@ class ChessBoardView(QWidget):
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
             return None
 
-        # Calculate the file and rank
+        # Calculate the file and rank based on board orientation
         file_idx = x // self.square_size
-        rank_idx = 7 - (y // self.square_size)  # Invert rank because chess board has rank 1 at the bottom
+        rank_idx = y // self.square_size
+
+        if self.flipped:
+            file_idx = 7 - file_idx
+            rank_idx = rank_idx
+        else:
+            file_idx = file_idx
+            rank_idx = 7 - rank_idx  # Invert rank because chess board has rank 1 at the bottom
 
         # Convert to chess.Square
         return chess.square(file_idx, rank_idx)
+
+    def flip_board(self):
+        """Flip the board orientation."""
+        self.flipped = not self.flipped
+        self.update()
+        return self.flipped
+
+    def set_turn(self, turn):
+        """
+        Set whose turn it is to move.
+
+        Args:
+            turn: True for white's turn, False for black's turn
+        """
+        # Create a copy of the current board
+        new_board = self.board.copy()
+
+        # Set the turn
+        new_board.turn = turn
+
+        # Update the board
+        self.board = new_board
+        self.update()
+
+        return turn
 
     def paintEvent(self, event):
         """Paint the chess board and pieces."""
@@ -199,9 +234,13 @@ class ChessBoardView(QWidget):
                 is_light = (rank + file) % 2 == 0
                 color = self.LIGHT_SQUARE_COLOR if is_light else self.DARK_SQUARE_COLOR
 
-                # Calculate the square position
-                x = file * self.square_size
-                y = (7 - rank) * self.square_size  # Invert rank because chess board has rank 1 at the bottom
+                # Calculate the square position based on board orientation
+                if self.flipped:
+                    x = (7 - file) * self.square_size
+                    y = rank * self.square_size
+                else:
+                    x = file * self.square_size
+                    y = (7 - rank) * self.square_size  # Invert rank because chess board has rank 1 at the bottom
 
                 # Draw the square
                 painter.fillRect(x, y, self.square_size, self.square_size, color)
@@ -215,8 +254,15 @@ class ChessBoardView(QWidget):
         for square in self.last_move_squares:
             file_idx = chess.square_file(square)
             rank_idx = chess.square_rank(square)
-            x = file_idx * self.square_size
-            y = (7 - rank_idx) * self.square_size
+
+            # Calculate position based on board orientation
+            if self.flipped:
+                x = (7 - file_idx) * self.square_size
+                y = rank_idx * self.square_size
+            else:
+                x = file_idx * self.square_size
+                y = (7 - rank_idx) * self.square_size
+
             painter.drawRect(x, y, self.square_size, self.square_size)
 
         # Draw other highlights
@@ -225,8 +271,15 @@ class ChessBoardView(QWidget):
         for square in self.highlighted_squares:
             file_idx = chess.square_file(square)
             rank_idx = chess.square_rank(square)
-            x = file_idx * self.square_size
-            y = (7 - rank_idx) * self.square_size
+
+            # Calculate position based on board orientation
+            if self.flipped:
+                x = (7 - file_idx) * self.square_size
+                y = rank_idx * self.square_size
+            else:
+                x = file_idx * self.square_size
+                y = (7 - rank_idx) * self.square_size
+
             painter.drawRect(x, y, self.square_size, self.square_size)
 
     def _draw_pieces(self, painter):
@@ -241,8 +294,14 @@ class ChessBoardView(QWidget):
                 # Calculate the square position
                 file_idx = chess.square_file(square)
                 rank_idx = chess.square_rank(square)
-                x = file_idx * self.square_size
-                y = (7 - rank_idx) * self.square_size
+
+                # Calculate position based on board orientation
+                if self.flipped:
+                    x = (7 - file_idx) * self.square_size
+                    y = rank_idx * self.square_size
+                else:
+                    x = file_idx * self.square_size
+                    y = (7 - rank_idx) * self.square_size
 
                 # Draw the piece if we have an image for it
                 if piece_symbol in self.piece_images:
@@ -276,11 +335,17 @@ class ChessBoardView(QWidget):
             to_file = chess.square_file(to_square)
             to_rank = chess.square_rank(to_square)
 
-            # Calculate center coordinates
-            from_x = from_file * self.square_size + self.square_size // 2
-            from_y = (7 - from_rank) * self.square_size + self.square_size // 2
-            to_x = to_file * self.square_size + self.square_size // 2
-            to_y = (7 - to_rank) * self.square_size + self.square_size // 2
+            # Calculate center coordinates based on board orientation
+            if self.flipped:
+                from_x = (7 - from_file) * self.square_size + self.square_size // 2
+                from_y = from_rank * self.square_size + self.square_size // 2
+                to_x = (7 - to_file) * self.square_size + self.square_size // 2
+                to_y = to_rank * self.square_size + self.square_size // 2
+            else:
+                from_x = from_file * self.square_size + self.square_size // 2
+                from_y = (7 - from_rank) * self.square_size + self.square_size // 2
+                to_x = to_file * self.square_size + self.square_size // 2
+                to_y = (7 - to_rank) * self.square_size + self.square_size // 2
 
             # Create points for the arrow
             from_point = QPointF(from_x, from_y)
