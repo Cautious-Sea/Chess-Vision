@@ -5,11 +5,20 @@ This module provides functionality for detecting chess pieces using a YOLO model
 """
 
 import os
-import sys
-import cv2
 import numpy as np
 import pyautogui
-from ultralytics import YOLO
+
+try:
+    import cv2
+except ImportError:
+    print("OpenCV (cv2) not found. Please install it with: pip install opencv-python")
+    raise
+
+try:
+    from ultralytics import YOLO
+except ImportError:
+    print("Ultralytics not found. Please install it with: pip install ultralytics")
+    raise
 
 
 class ChessPieceDetector:

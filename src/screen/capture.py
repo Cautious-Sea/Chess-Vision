@@ -5,8 +5,13 @@ This module provides functionality for capturing regions of the screen.
 """
 
 import numpy as np
-import cv2
 import pyautogui
+
+try:
+    import cv2
+except ImportError:
+    print("OpenCV (cv2) not found. Please install it with: pip install opencv-python")
+    raise
 
 
 class ScreenCapture:
