@@ -13,11 +13,12 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QGroupBox, QGridLayout, QFileDialog,
-    QComboBox, QSpinBox
+    QComboBox, QSpinBox, QMessageBox
 )
 
 from src.gui.board_view import ChessBoardView
 from src.chess.engine import StockfishEngine
+from src.screen.selector import select_screen_region, save_selection, load_selection
 
 
 class ChessVisionApp(QMainWindow):
@@ -49,6 +50,11 @@ class ChessVisionApp(QMainWindow):
         self.is_analyzing = False
         self.analysis_thread = None
         self.analysis_running = False
+
+        # Set up the screen selection
+        self.config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "config")
+        self.selection_file = os.path.join(self.config_dir, "screen_selection.json")
+        self.screen_selection = load_selection(self.selection_file)
 
         # Create the control panel
         self.control_panel = self._create_control_panel()
@@ -177,10 +183,30 @@ class ChessVisionApp(QMainWindow):
         # Add widgets to history layout
         history_layout.addWidget(self.history_label)
 
+        # Screen selection group
+        screen_group = QGroupBox("Screen Selection")
+        screen_layout = QVBoxLayout(screen_group)
+        screen_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+
+        # Selection status
+        self.selection_label = QLabel("No region selected")
+        if self.screen_selection:
+            x, y, w, h = self.screen_selection
+            self.selection_label.setText(f"Selected region: ({x}, {y}, {w}x{h})")
+
+        # Select button
+        select_button = QPushButton("Select Chess Board")
+        select_button.clicked.connect(self._on_select_board)
+
+        # Add widgets to screen layout
+        screen_layout.addWidget(self.selection_label)
+        screen_layout.addWidget(select_button)
+
         # Add groups to main layout
         layout.addWidget(position_group)
         layout.addWidget(analysis_group)
         layout.addWidget(history_group)
+        layout.addWidget(screen_group)
         layout.addStretch(1)
 
         # Set a fixed width for the panel
@@ -302,6 +328,46 @@ class ChessVisionApp(QMainWindow):
     def _on_lines_changed(self, lines):
         """Handle changes to the number of analysis lines."""
         self.engine.set_multipv(lines)
+
+    def _on_select_board(self):
+        """Handle the Select Chess Board button click."""
+        # Stop analysis if it's running
+        was_analyzing = self.is_analyzing
+        if was_analyzing:
+            self._on_toggle_analysis()
+
+        # Minimize the main window temporarily
+        self.showMinimized()
+
+        # Wait a moment for the window to minimize
+        QApplication.processEvents()
+
+        # Show the screen selector (without a parent to ensure it's a top-level window)
+        selection = select_screen_region(None)
+
+        # Restore the main window
+        self.showNormal()
+        self.activateWindow()
+
+        # Process the selection
+        if selection:
+            self.screen_selection = selection
+            x, y, w, h = selection
+            self.selection_label.setText(f"Selected region: ({x}, {y}, {w}x{h})")
+
+            # Save the selection
+            save_selection(selection, self.selection_file)
+
+            # Show a confirmation message
+            QMessageBox.information(
+                self,
+                "Region Selected",
+                f"Chess board region selected: ({x}, {y}, {w}x{h})"
+            )
+
+            # Restart analysis if it was running
+            if was_analyzing:
+                self._on_toggle_analysis()
 
     def update_from_fen(self, fen):
         """Update the board from a FEN string."""
