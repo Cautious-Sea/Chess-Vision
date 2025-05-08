@@ -104,9 +104,9 @@ ENV/
 *.swp
 *.swo
 
-# Stockfish executable
-stockfish.exe
-stockfish
+# Stockfish executable (commented out to include in repository)
+# stockfish.exe
+# stockfish
 
 # Project specific
 *.pt
