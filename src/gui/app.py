@@ -254,10 +254,15 @@ class ChessVisionApp(QMainWindow):
         reset_to_detected_button = QPushButton("Reset to Detected Position")
         reset_to_detected_button.clicked.connect(self._on_reset_to_detected)
 
+        # Adjust detection area button
+        adjust_area_button = QPushButton("Adjust Detection Area")
+        adjust_area_button.clicked.connect(self._on_adjust_detection_area)
+
         # Add widgets to detection layout
         detection_layout.addWidget(self.detection_label)
         detection_layout.addWidget(self.detection_button)
         detection_layout.addWidget(reset_to_detected_button)
+        detection_layout.addWidget(adjust_area_button)
 
         # Board Controls group
         board_controls_group = QGroupBox("Board Controls")
@@ -700,6 +705,53 @@ class ChessVisionApp(QMainWindow):
                 "No Position Available",
                 "No detected position is available. Start detection first."
             )
+
+    def _on_adjust_detection_area(self):
+        """
+        Handle the Adjust Detection Area button click.
+
+        This method adjusts the y-coordinate of the detection area by decreasing it by 30 pixels.
+        """
+        # Check if a screen region is selected
+        if self.screen_selection is None:
+            QMessageBox.warning(
+                self,
+                "No Region Selected",
+                "Please select a chess board region first."
+            )
+            return
+
+        # Get the current selection
+        x, y, w, h = self.screen_selection
+
+        # Decrease the y-coordinate by 30 pixels (move up)
+        new_y = max(0, y - 30)  # Ensure y doesn't go below 0
+
+        # Create the new selection
+        new_selection = (x, new_y, w, h)
+        self.screen_selection = new_selection
+
+        # Update the selection label
+        self.selection_label.setText(f"Selected region: ({x}, {new_y}, {w}x{h})")
+
+        # Save the new selection
+        save_selection(new_selection, self.selection_file)
+
+        # Update the detector with the new selection
+        self.detector.set_screen_region(new_selection)
+
+        # Show a confirmation message
+        QMessageBox.information(
+            self,
+            "Detection Area Adjusted",
+            f"Detection area moved up by 30 pixels.\nNew position: ({x}, {new_y}, {w}x{h})"
+        )
+
+        # If detection is running, restart it to apply the new area
+        if self.detection_running:
+            # Stop and restart detection
+            self._stop_detection()
+            self._start_detection()
 
     def _on_select_board(self):
         """Handle the Select Chess Board button click."""
