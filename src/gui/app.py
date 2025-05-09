@@ -83,6 +83,12 @@ class ChessVisionApp(QMainWindow):
         # Set up the board with the initial position
         self.board_view.set_board(chess.Board())
 
+        # Set up the move callback
+        self.board_view.set_move_made_callback(self._on_move_made)
+
+        # Set up move history
+        self.move_history = []
+
         # Set up a timer for periodic UI updates
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self._update_ui)
@@ -856,6 +862,51 @@ class ChessVisionApp(QMainWindow):
 
         # No matching move found
         return None
+
+    def _on_move_made(self, _, san):
+        """
+        Handle a move made on the board.
+
+        Args:
+            _: The chess.Move object (unused)
+            san: The move in Standard Algebraic Notation
+        """
+        print(f"Move made: {san}")
+
+        # Add the move to the history
+        self.add_move_to_history(san)
+
+        # Update the FEN input field
+        self.fen_input.setText(self.board_view.board.fen())
+
+        # Update the turn radio buttons
+        self._update_turn_radio_buttons()
+
+        # Update the previous board state
+        self.previous_board = self.board_view.board.copy()
+
+    def add_move_to_history(self, move_san):
+        """
+        Add a move to the history.
+
+        Args:
+            move_san: The move in Standard Algebraic Notation
+        """
+        # Get the current position
+        position = self.board_view.board.fullmove_number
+
+        # Add the move to the history
+        if self.board_view.board.turn:  # If it's white's turn, this was a black move
+            self.move_history.append(f"{position-1}. ... {move_san}")
+        else:  # If it's black's turn, this was a white move
+            self.move_history.append(f"{position}. {move_san}")
+
+        # Limit the history to the last 10 moves
+        if len(self.move_history) > 10:
+            self.move_history = self.move_history[-10:]
+
+        # Update the history display
+        self.history_label.setText("\n".join(self.move_history))
 
     def _update_turn_radio_buttons(self):
         """Update the turn radio buttons based on the current board state."""

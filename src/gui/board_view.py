@@ -6,7 +6,7 @@ This module provides a graphical representation of a chess board using PyQt5.
 
 import os
 import chess
-from PyQt5.QtCore import Qt, QSize, QRect, QPointF
+from PyQt5.QtCore import Qt, QSize, QRect, QPointF, QPoint
 from PyQt5.QtGui import QPainter, QColor, QPixmap, QPolygonF
 from PyQt5.QtWidgets import QWidget
 
@@ -62,9 +62,23 @@ class ChessBoardView(QWidget):
         # Set up board orientation (False = white at bottom, True = black at bottom)
         self.flipped = False
 
+        # Set up drag and drop
+        self.dragging = False
+        self.drag_piece = None
+        self.drag_source = None
+        self.drag_pos = QPoint()
+        self.legal_moves = []
+
+        # Set up move callback
+        self.move_made_callback = None
+
         # Set up the widget
         self.setMinimumSize(self.board_size, self.board_size)
         self.setMaximumSize(self.board_size, self.board_size)
+        self.setMouseTracking(True)  # Enable mouse tracking for hover effects
+
+        # Enable focus to receive key events
+        self.setFocusPolicy(Qt.StrongFocus)
 
         # Load piece images if the directory exists
         self._load_piece_images()
@@ -220,11 +234,20 @@ class ChessBoardView(QWidget):
         # Draw the highlights
         self._draw_highlights(painter)
 
-        # Draw the pieces
+        # Draw the pieces (except the dragged piece)
         self._draw_pieces(painter)
 
         # Draw the arrows
         self._draw_arrows(painter)
+
+        # Draw the dragged piece
+        if self.dragging and self.drag_piece:
+            piece_symbol = self.drag_piece.symbol()
+            if piece_symbol in self.piece_images:
+                # Calculate the position to center the piece on the cursor
+                x = self.drag_pos.x() - self.square_size // 2
+                y = self.drag_pos.y() - self.square_size // 2
+                painter.drawPixmap(x, y, self.piece_images[piece_symbol])
 
     def _draw_board(self, painter):
         """Draw the chess board squares."""
@@ -285,6 +308,10 @@ class ChessBoardView(QWidget):
     def _draw_pieces(self, painter):
         """Draw the chess pieces."""
         for square in chess.SQUARES:
+            # Skip the dragged piece
+            if self.dragging and square == self.drag_source:
+                continue
+
             piece = self.board.piece_at(square)
 
             if piece:
@@ -416,3 +443,94 @@ class ChessBoardView(QWidget):
             painter.setBrush(color)
             painter.drawPolygon(shaft_polygon)
             painter.drawPolygon(head_polygon)
+
+    def mousePressEvent(self, event):
+        """Handle mouse press events for piece movement."""
+        if event.button() == Qt.LeftButton:
+            # Get the square at the mouse position
+            square = self.square_at(event.pos())
+
+            if square is not None:
+                # Check if there's a piece at the square
+                piece = self.board.piece_at(square)
+
+                if piece:
+                    # Check if it's the correct turn
+                    if piece.color == self.board.turn:
+                        # Start dragging the piece
+                        self.dragging = True
+                        self.drag_piece = piece
+                        self.drag_source = square
+                        self.drag_pos = event.pos()
+
+                        # Calculate legal moves for this piece
+                        self.legal_moves = [move for move in self.board.legal_moves if move.from_square == square]
+
+                        # Highlight the source square and legal target squares
+                        highlight_squares = [move.to_square for move in self.legal_moves]
+                        highlight_squares.append(square)
+                        self.highlight_squares(highlight_squares)
+
+                        # Capture the mouse
+                        self.setMouseTracking(True)
+                        self.update()
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events for piece movement."""
+        if self.dragging:
+            # Update the drag position
+            self.drag_pos = event.pos()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release events for piece movement."""
+        if event.button() == Qt.LeftButton and self.dragging:
+            # Get the square at the mouse position
+            target_square = self.square_at(event.pos())
+
+            if target_square is not None:
+                # Check if the move is legal
+                move = chess.Move(self.drag_source, target_square)
+
+                # Check for promotion
+                if self.drag_piece.piece_type == chess.PAWN:
+                    # Check if pawn is moving to the last rank
+                    if (self.drag_piece.color == chess.WHITE and chess.square_rank(target_square) == 7) or \
+                       (self.drag_piece.color == chess.BLACK and chess.square_rank(target_square) == 0):
+                        # Promote to queen by default
+                        move = chess.Move(self.drag_source, target_square, promotion=chess.QUEEN)
+
+                if move in self.legal_moves:
+                    # Make the move
+                    san = self.board.san(move)
+                    self.board.push(move)
+
+                    # Update the last move highlight
+                    self.highlight_last_move(move)
+
+                    # Clear the legal move highlights
+                    self.highlighted_squares = []
+
+                    # Call the move callback if set
+                    if self.move_made_callback:
+                        self.move_made_callback(move, san)
+                else:
+                    # Move is not legal, just clear highlights
+                    self.highlighted_squares = []
+            else:
+                # No target square, just clear highlights
+                self.highlighted_squares = []
+
+            # End dragging
+            self.dragging = False
+            self.drag_piece = None
+            self.drag_source = None
+            self.legal_moves = []
+
+            # Release the mouse
+            self.setMouseTracking(False)
+            self.update()
+
+    def set_move_made_callback(self, callback):
+        """Set the callback function to be called when a move is made."""
+        self.move_made_callback = callback
