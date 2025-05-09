@@ -305,7 +305,12 @@ class ChessVisionApp(QMainWindow):
         return panel
 
     def _on_set_position(self):
-        """Handle the Set Position button click."""
+        """
+        Handle the Set Position button click.
+
+        This method takes the FEN string from the input field and sets the board position.
+        This is the only place where the board is updated from the FEN input during detection.
+        """
         fen = self.fen_input.text()
         print(f"Setting position from FEN: {fen}")
 
@@ -319,19 +324,34 @@ class ChessVisionApp(QMainWindow):
             # Update the board view
             self.board_view.set_board(new_board)
 
-            # Update the FEN input field
-            self.fen_input.setText(fen)
-
             # Reset the move history
+            self.move_history = []
             self.history_label.setText("No moves yet")
 
             # Update the turn radio buttons
             self._update_turn_radio_buttons()
 
+            # Store this as the last valid FEN
+            self.last_fen = fen
+
             print(f"Successfully set position from FEN: {fen}")
+
+            # Show a confirmation message
+            QMessageBox.information(
+                self,
+                "Position Set",
+                "Board has been updated with the FEN position."
+            )
         except Exception as e:
             print(f"Failed to set position from FEN: {fen}, error: {e}")
             self.fen_input.setText(self.board_view.board.fen())
+
+            # Show an error message
+            QMessageBox.warning(
+                self,
+                "Invalid FEN",
+                f"Failed to set position from FEN: {e}"
+            )
 
     def _on_reset(self):
         """Handle the Reset button click."""
@@ -830,63 +850,27 @@ class ChessVisionApp(QMainWindow):
 
     def _direct_update_board(self, fen):
         """
-        Directly update the board from a FEN string.
+        Update the FEN input field with the detected FEN string.
 
         This method is designed to be called from the main UI thread
-        to update the board with a new FEN string.
-
-        It calculates what move was made by comparing the new position
-        with the previous position, and applies that move to ensure
-        the turn information is correctly updated.
+        to update the FEN input field with a new FEN string from detection.
+        The board is not updated until the user clicks "Set Position".
         """
-        print(f"Directly updating board with FEN: {fen}")
+        print(f"Updating FEN input field with: {fen}")
 
         try:
-            # Create a new board from the FEN
-            new_board = chess.Board(fen)
+            # Validate the FEN by creating a board from it
+            _ = chess.Board(fen)  # Just validate, we don't need the board object
 
-            # Try to find what move was made
-            move = self._find_move_between_positions(self.previous_board, new_board)
+            # Update the FEN input field only
+            self.fen_input.setText(fen)
 
-            if move:
-                # A move was found, apply it to the previous board
-                print(f"Detected move: {self.previous_board.san(move)}")
+            # Store the last valid FEN
+            self.last_fen = fen
 
-                # Make the move on the previous board
-                self.previous_board.push(move)
-
-                # Use the updated previous board (which has the correct turn)
-                self.board_view.set_board(self.previous_board)
-
-                # Add the move to the history
-                self.add_move_to_history(self.previous_board.san(move))
-
-                # Update the FEN input field with the current board FEN
-                self.fen_input.setText(self.previous_board.fen())
-
-                # Update the turn radio buttons
-                self._update_turn_radio_buttons()
-
-                print(f"Board updated with move: {self.previous_board.san(move)}")
-            else:
-                # No move was found, just set the board directly
-                print("No move detected, setting board directly")
-
-                # Update the previous board
-                self.previous_board = new_board.copy()
-
-                # Use the set_board method to update the board
-                self.board_view.set_board(new_board)
-
-                # Update the FEN input field
-                self.fen_input.setText(fen)
-
-                # Update the turn radio buttons
-                self._update_turn_radio_buttons()
-
-                print(f"Board directly updated with FEN: {fen}")
+            print(f"FEN input field updated with: {fen}")
         except Exception as e:
-            print(f"Error directly updating board: {e}")
+            print(f"Error updating FEN input field: {e}")
 
     def _safe_update_board(self, fen):
         """
