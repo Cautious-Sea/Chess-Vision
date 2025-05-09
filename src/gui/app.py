@@ -141,11 +141,13 @@ class ChessVisionApp(QMainWindow):
         set_position_button = QPushButton("Set Position")
         set_position_button.clicked.connect(self._on_set_position)
         set_position_button.setMaximumWidth(100)
+        set_position_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Reset button
         reset_button = QPushButton("Reset")  # Shorter text
         reset_button.clicked.connect(self._on_reset)
         reset_button.setMaximumWidth(70)
+        reset_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Add buttons to layout
         button_layout.addWidget(set_position_button)
@@ -199,6 +201,7 @@ class ChessVisionApp(QMainWindow):
         self.analysis_button = QPushButton("Start Analysis")
         self.analysis_button.clicked.connect(self._on_toggle_analysis)
         self.analysis_button.setMaximumWidth(100)
+        self.analysis_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Add widgets to analysis layout
         analysis_layout.addWidget(self.analysis_label)
@@ -233,6 +236,7 @@ class ChessVisionApp(QMainWindow):
         # Select button
         select_button = QPushButton("Select Chess Board")
         select_button.clicked.connect(self._on_select_board)
+        select_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Add widgets to screen layout
         screen_layout.addWidget(self.selection_label)
@@ -245,18 +249,22 @@ class ChessVisionApp(QMainWindow):
 
         # Detection status
         self.detection_label = QLabel("Detection not running")
+        self.detection_label.setAlignment(Qt.AlignLeft)
 
         # Start/stop detection button
         self.detection_button = QPushButton("Start Detection")
         self.detection_button.clicked.connect(self._on_toggle_detection)
+        self.detection_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Reset to detected position button
         reset_to_detected_button = QPushButton("Reset to Detected Position")
         reset_to_detected_button.clicked.connect(self._on_reset_to_detected)
+        reset_to_detected_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Adjust detection area button
         adjust_area_button = QPushButton("Adjust Detection Area")
         adjust_area_button.clicked.connect(self._on_adjust_detection_area)
+        adjust_area_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Add widgets to detection layout
         detection_layout.addWidget(self.detection_label)
@@ -272,6 +280,7 @@ class ChessVisionApp(QMainWindow):
         # Flip board button
         flip_board_button = QPushButton("Flip Board")
         flip_board_button.clicked.connect(self._on_flip_board)
+        flip_board_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Turn selector
         turn_layout = QHBoxLayout()
