@@ -19,11 +19,11 @@ class ChessBoardView(QWidget):
     or a FEN string. It handles rendering the board, pieces, and highlighting squares.
     """
 
-    # Colors for the chess board
-    LIGHT_SQUARE_COLOR = QColor(240, 217, 181)  # Light brown
-    DARK_SQUARE_COLOR = QColor(181, 136, 99)    # Dark brown
-    HIGHLIGHT_COLOR = QColor(106, 168, 79, 150)  # Green highlight for moves
-    LAST_MOVE_COLOR = QColor(205, 210, 106, 150)  # Yellow highlight for last move
+    # Colors for the chess board (matching the provided image)
+    LIGHT_SQUARE_COLOR = QColor(245, 222, 179)  # Light beige/cream
+    DARK_SQUARE_COLOR = QColor(205, 133, 63)    # Orange-brown
+    HIGHLIGHT_COLOR = QColor(100, 180, 100, 150)  # Green highlight for moves
+    LAST_MOVE_COLOR = QColor(230, 180, 80, 150)  # Golden highlight for last move
 
     # Colors for arrows
     ARROW_COLORS = [
