@@ -410,16 +410,49 @@ class ChessVisionApp(QMainWindow):
 
     def _analysis_worker(self):
         """Worker function for the analysis thread."""
+        consecutive_errors = 0
+        max_consecutive_errors = 3
+
         while self.analysis_running:
             # Get the current board position
             board = self.board_view.board
 
             # Analyze the position
             try:
+                # The engine.analyze method now has built-in error handling and recovery
                 self.current_analysis = self.engine.analyze(board, limit_time=0.1)
+
+                # If we got here without an exception, reset the error counter
+                consecutive_errors = 0
+
             except Exception as e:
-                print(f"Analysis error: {e}")
-                self.current_analysis = []
+                print(f"Analysis error in worker thread: {e}")
+                consecutive_errors += 1
+
+                # Provide a placeholder analysis result
+                self.current_analysis = [{"score": "Engine error", "pv": "", "moves": []}]
+
+                # If we've had too many consecutive errors, try to restart the engine
+                if consecutive_errors >= max_consecutive_errors:
+                    print(f"Too many consecutive errors ({consecutive_errors}), restarting engine...")
+                    try:
+                        # Stop the engine
+                        self.engine.stop()
+                        # Wait a moment
+                        time.sleep(1)
+                        # Start it again
+                        success = self.engine.start()
+                        if success:
+                            print("Engine successfully restarted")
+                            consecutive_errors = 0
+                        else:
+                            print("Failed to restart engine")
+                    except Exception as restart_error:
+                        print(f"Error restarting engine: {restart_error}")
+
+                # Sleep a bit longer after an error
+                time.sleep(1)
+                continue
 
             # Sleep to avoid excessive CPU usage
             time.sleep(0.5)
@@ -462,34 +495,49 @@ class ChessVisionApp(QMainWindow):
         arrows = []
 
         for i, analysis in enumerate(self.current_analysis):
-            if "score" in analysis and "pv" in analysis and "moves" in analysis:
+            if "score" in analysis:
                 line_number = i + 1
                 score = analysis["score"]
-                moves = analysis["moves"]  # This is a list of SAN moves
 
-                # Limit the number of moves shown in text
-                if len(moves) > 5:
-                    moves_text = " ".join(moves[:5]) + "..."
-                else:
-                    moves_text = " ".join(moves)
+                # Check if this is an error message
+                if score in ["Engine error", "Engine restarting...", "Analysis error"]:
+                    # Display the error message
+                    analysis_text = f"Engine status: {score}\nPlease wait while the engine recovers..."
+                    break
 
-                analysis_text += f"Line {line_number}: {score} - {moves_text}\n"
+                # Normal analysis processing
+                if "moves" in analysis:
+                    moves = analysis["moves"]  # This is a list of SAN moves
 
-                # Add arrow for the first move of each line
-                if moves and i < 5:  # Limit to 5 arrows
-                    # Get the move from the analysis
-                    board = self.board_view.board.copy()
+                    # Limit the number of moves shown in text
+                    if len(moves) > 5:
+                        moves_text = " ".join(moves[:5]) + "..."
+                    else:
+                        moves_text = " ".join(moves)
 
-                    # Find the move in UCI format
-                    for move in board.legal_moves:
-                        if board.san(move) == moves[0]:
-                            # Add arrow (from_square, to_square, color_index)
-                            arrows.append((move.from_square, move.to_square, i))
-                            break
+                    analysis_text += f"Line {line_number}: {score} - {moves_text}\n"
+
+                    # Add arrow for the first move of each line
+                    if moves and i < 5:  # Limit to 5 arrows
+                        # Get the move from the analysis
+                        board = self.board_view.board.copy()
+
+                        # Find the move in UCI format
+                        for move in board.legal_moves:
+                            try:
+                                if board.san(move) == moves[0]:
+                                    # Add arrow (from_square, to_square, color_index)
+                                    arrows.append((move.from_square, move.to_square, i))
+                                    break
+                            except Exception as e:
+                                print(f"Error processing move for arrow: {e}")
+                                continue
 
         # Update the analysis text
         if analysis_text:
             self.analysis_label.setText(analysis_text)
+        else:
+            self.analysis_label.setText("Waiting for analysis...")
 
         # Update the arrows on the board
         self.board_view.set_arrows(arrows)
