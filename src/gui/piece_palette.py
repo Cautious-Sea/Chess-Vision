@@ -23,8 +23,8 @@ class ChessPiecePalette(QWidget):
         self.piece_images = {}
 
         # Set up the palette size
-        self.piece_size = 60  # Size of each piece in the palette (increased from 40)
-        self.padding = 5      # Padding between pieces
+        self.piece_size = 40  # Size of each piece in the palette (reduced to save space)
+        self.padding = 3      # Padding between pieces (reduced to save space)
 
         # Set up the pieces to display in two rows
         self.white_pieces = ['K', 'Q', 'R', 'B', 'N', 'P']  # White pieces (first row)

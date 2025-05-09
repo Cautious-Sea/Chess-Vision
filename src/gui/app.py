@@ -83,15 +83,22 @@ class ChessVisionApp(QMainWindow):
         # Create the piece palette
         self.piece_palette = ChessPiecePalette()
 
-        # Add widgets to the board controls layout with a 4:1 ratio (board:controls)
-        self.board_controls_layout.addWidget(self.board_view, 4)
+        # Create a vertical layout for the board and piece palette
+        board_palette_layout = QVBoxLayout()
+
+        # Add the board to the layout (giving it most of the space)
+        board_palette_layout.addWidget(self.board_view, 15)
+
+        # Add the piece palette to the layout (giving it minimal space)
+        board_palette_layout.addWidget(self.piece_palette, 1)
+        board_palette_layout.setSpacing(0)  # Reduce spacing between board and palette
+
+        # Add the board+palette layout and control panel to the main horizontal layout
+        self.board_controls_layout.addLayout(board_palette_layout, 3)  # Reduced from 4 to give more space to control panel
         self.board_controls_layout.addWidget(self.control_panel, 1)
 
-        # Add the board controls layout to the main layout (giving it more space)
-        self.main_layout.addLayout(self.board_controls_layout, 10)
-
-        # Add the piece palette to the main layout (giving it less space but enough to be visible)
-        self.main_layout.addWidget(self.piece_palette, 1)
+        # Add the board controls layout to the main layout
+        self.main_layout.addLayout(self.board_controls_layout)
 
         # Set up the board with the initial position
         self.board_view.set_board(chess.Board())
@@ -141,13 +148,11 @@ class ChessVisionApp(QMainWindow):
         set_position_button = QPushButton("Set Position")
         set_position_button.clicked.connect(self._on_set_position)
         set_position_button.setMaximumWidth(100)
-        set_position_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Reset button
         reset_button = QPushButton("Reset")  # Shorter text
         reset_button.clicked.connect(self._on_reset)
         reset_button.setMaximumWidth(70)
-        reset_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Add buttons to layout
         button_layout.addWidget(set_position_button)
@@ -201,7 +206,6 @@ class ChessVisionApp(QMainWindow):
         self.analysis_button = QPushButton("Start Analysis")
         self.analysis_button.clicked.connect(self._on_toggle_analysis)
         self.analysis_button.setMaximumWidth(100)
-        self.analysis_button.setStyleSheet("text-align: left; padding-left: 5px;")
 
         # Add widgets to analysis layout
         analysis_layout.addWidget(self.analysis_label)
@@ -236,7 +240,6 @@ class ChessVisionApp(QMainWindow):
         # Select button
         select_button = QPushButton("Select Chess Board")
         select_button.clicked.connect(self._on_select_board)
-        select_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Add widgets to screen layout
         screen_layout.addWidget(self.selection_label)
@@ -249,22 +252,18 @@ class ChessVisionApp(QMainWindow):
 
         # Detection status
         self.detection_label = QLabel("Detection not running")
-        self.detection_label.setAlignment(Qt.AlignLeft)
 
         # Start/stop detection button
         self.detection_button = QPushButton("Start Detection")
         self.detection_button.clicked.connect(self._on_toggle_detection)
-        self.detection_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Reset to detected position button
         reset_to_detected_button = QPushButton("Reset to Detected Position")
         reset_to_detected_button.clicked.connect(self._on_reset_to_detected)
-        reset_to_detected_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Adjust detection area button
         adjust_area_button = QPushButton("Adjust Detection Area")
         adjust_area_button.clicked.connect(self._on_adjust_detection_area)
-        adjust_area_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Add widgets to detection layout
         detection_layout.addWidget(self.detection_label)
@@ -280,7 +279,6 @@ class ChessVisionApp(QMainWindow):
         # Flip board button
         flip_board_button = QPushButton("Flip Board")
         flip_board_button.clicked.connect(self._on_flip_board)
-        flip_board_button.setStyleSheet("text-align: left; padding-left: 10px;")
 
         # Turn selector
         turn_layout = QHBoxLayout()
@@ -311,7 +309,7 @@ class ChessVisionApp(QMainWindow):
         layout.addWidget(history_group)
         layout.addWidget(screen_group)
         layout.addWidget(detection_group)
-        layout.addStretch(1)
+        layout.addStretch(1)  # This will push all widgets up and leave empty space at the bottom
 
         # Set a fixed width for the panel
         panel.setMaximumWidth(280)  # Limit the width of the control panel
