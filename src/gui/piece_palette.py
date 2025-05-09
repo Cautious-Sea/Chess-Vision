@@ -86,8 +86,8 @@ class ChessPiecePalette(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Draw the background as white
-        painter.fillRect(0, 0, self.width(), self.height(), Qt.white)
+        # Draw the background as light gray to match the control panel
+        painter.fillRect(0, 0, self.width(), self.height(), QColor(240, 240, 240))
 
         # Draw white pieces (first row)
         x = self.padding
@@ -174,7 +174,7 @@ class ChessPiecePalette(QWidget):
         """Draw the clear square button at the specified position."""
         # Draw a red X for the clear square button
         painter.setPen(Qt.black)
-        painter.setBrush(Qt.white)  # Match the white background
+        painter.setBrush(QColor(240, 240, 240))  # Match the light gray background
         painter.drawRect(x, y, self.piece_size, self.piece_size)
 
         # Draw the X
