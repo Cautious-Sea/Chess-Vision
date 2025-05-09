@@ -80,6 +80,9 @@ class ChessBoardView(QWidget):
         # Enable focus to receive key events
         self.setFocusPolicy(Qt.StrongFocus)
 
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+
         # Load piece images if the directory exists
         self._load_piece_images()
 
@@ -223,7 +226,7 @@ class ChessBoardView(QWidget):
 
         return turn
 
-    def paintEvent(self, event):
+    def paintEvent(self, _):
         """Paint the chess board and pieces."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -534,3 +537,57 @@ class ChessBoardView(QWidget):
     def set_move_made_callback(self, callback):
         """Set the callback function to be called when a move is made."""
         self.move_made_callback = callback
+
+    def dragEnterEvent(self, event):
+        """Handle drag enter events."""
+        # Accept the drag if it has text data (piece symbol)
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        """Handle drag move events."""
+        # Accept the drag if it has text data (piece symbol)
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        """Handle drop events."""
+        # Get the piece symbol from the mime data
+        piece_symbol = event.mimeData().text()
+
+        # Get the square at the drop position
+        square = self.square_at(event.pos())
+
+        if square is not None:
+            print(f"Dropping piece {piece_symbol} at square {chess.square_name(square)}")
+
+            # Create a copy of the current board
+            new_board = self.board.copy()
+
+            # Handle the clear square button
+            if piece_symbol == 'X':
+                # Just remove any existing piece at the square
+                new_board.remove_piece_at(square)
+                print(f"Cleared square {chess.square_name(square)}")
+            else:
+                # Remove any existing piece at the square
+                new_board.remove_piece_at(square)
+
+                # Add the new piece
+                piece_color = chess.WHITE if piece_symbol.isupper() else chess.BLACK
+                piece_type = chess.PIECE_SYMBOLS.index(piece_symbol.lower())
+                new_board.set_piece_at(square, chess.Piece(piece_type, piece_color))
+
+            # Update the board
+            self.set_board(new_board)
+
+            # Notify the parent that the board has changed
+            if hasattr(self.parent(), 'update_from_board_change'):
+                self.parent().update_from_board_change(new_board)
+
+            # Accept the drop
+            event.acceptProposedAction()
+
+            print(f"Piece {piece_symbol} placed at {chess.square_name(square)}")
+        else:
+            print("Drop position is not on a valid square")

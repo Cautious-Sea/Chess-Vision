@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QGroupBox, QSpinBox, QMessageBox,
     QRadioButton
 )
+from src.gui.piece_palette import ChessPiecePalette
 
 from src.gui.board_view import ChessBoardView
 from src.chess.engine import StockfishEngine
@@ -42,7 +43,10 @@ class ChessVisionApp(QMainWindow):
         # Set up the central widget and layout
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+
+        # Create horizontal layout for board and controls
+        self.board_controls_layout = QHBoxLayout()
 
         # Create the board view
         self.board_view = ChessBoardView()
@@ -76,9 +80,18 @@ class ChessVisionApp(QMainWindow):
         # Create the control panel
         self.control_panel = self._create_control_panel()
 
-        # Add widgets to the main layout with a 4:1 ratio (board:controls)
-        self.main_layout.addWidget(self.board_view, 4)
-        self.main_layout.addWidget(self.control_panel, 1)
+        # Create the piece palette
+        self.piece_palette = ChessPiecePalette()
+
+        # Add widgets to the board controls layout with a 4:1 ratio (board:controls)
+        self.board_controls_layout.addWidget(self.board_view, 4)
+        self.board_controls_layout.addWidget(self.control_panel, 1)
+
+        # Add the board controls layout to the main layout
+        self.main_layout.addLayout(self.board_controls_layout, 1)
+
+        # Add the piece palette to the main layout
+        self.main_layout.addWidget(self.piece_palette, 0)
 
         # Set up the board with the initial position
         self.board_view.set_board(chess.Board())
@@ -491,6 +504,89 @@ class ChessVisionApp(QMainWindow):
             # Set black to move
             self.board_view.set_turn(False)
             print("Turn set to Black")
+
+    def update_from_board_change(self, new_board):
+        """
+        Update the application state when the board changes.
+
+        Args:
+            new_board: The new chess.Board object
+        """
+        # Update the FEN input field
+        self.fen_input.setText(new_board.fen())
+
+        # Update the previous board state
+        self.previous_board = new_board.copy()
+
+        # Update the turn radio buttons
+        self._update_turn_radio_buttons()
+
+        print(f"Board updated with new FEN: {new_board.fen()}")
+
+    def handle_piece_drop(self, piece_symbol, position):
+        """
+        Handle a piece being dropped from the palette onto the board.
+
+        Args:
+            piece_symbol: The symbol of the piece being dropped (e.g., 'K', 'q', etc.)
+            position: The position where the piece was dropped (in parent coordinates)
+        """
+        print(f"Piece {piece_symbol} dropped at position {position}")
+
+        # Get the global position of the board view (for debugging if needed)
+        # board_global_pos = self.board_view.mapToGlobal(self.board_view.rect().topLeft())
+
+        # Get the global position of the drop
+        drop_global_pos = self.central_widget.mapToGlobal(position)
+
+        # Calculate the position relative to the board view
+        board_pos = self.board_view.mapFromGlobal(drop_global_pos)
+
+        print(f"Board position: {board_pos}")
+
+        # Check if the position is within the board view
+        if not self.board_view.rect().contains(board_pos):
+            print("Drop position is outside the board view")
+            return
+
+        # Get the square at the position
+        square = self.board_view.square_at(board_pos)
+
+        if square is not None:
+            print(f"Square: {chess.square_name(square)}")
+
+            # Create a copy of the current board
+            new_board = self.board_view.board.copy()
+
+            # Handle the clear square button
+            if piece_symbol == 'X':
+                # Just remove any existing piece at the square
+                new_board.remove_piece_at(square)
+                print(f"Cleared square {chess.square_name(square)}")
+            else:
+                # Remove any existing piece at the square
+                new_board.remove_piece_at(square)
+
+                # Add the new piece
+                piece_color = chess.WHITE if piece_symbol.isupper() else chess.BLACK
+                piece_type = chess.PIECE_SYMBOLS.index(piece_symbol.lower())
+                new_board.set_piece_at(square, chess.Piece(piece_type, piece_color))
+
+            # Update the board
+            self.board_view.set_board(new_board)
+
+            # Update the FEN input field
+            self.fen_input.setText(new_board.fen())
+
+            # Update the previous board state
+            self.previous_board = new_board.copy()
+
+            # Update the turn radio buttons
+            self._update_turn_radio_buttons()
+
+            print(f"Piece {piece_symbol} placed at {chess.square_name(square)}")
+        else:
+            print("Drop position is not on a valid square")
 
     def _on_reset_to_detected(self):
         """Reset the board to the latest detected position."""
