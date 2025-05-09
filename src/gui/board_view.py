@@ -258,7 +258,8 @@ class ChessBoardView(QWidget):
         for rank in range(8):
             for file in range(8):
                 # Determine the square color
-                is_light = (rank + file) % 2 == 0
+                # In standard chess notation, a1 is a dark square, which means (0,0) should be dark
+                is_light = (rank + file) % 2 == 1  # Changed from == 0 to == 1 to fix coloring
                 color = self.LIGHT_SQUARE_COLOR if is_light else self.DARK_SQUARE_COLOR
 
                 # Calculate the square position based on board orientation
