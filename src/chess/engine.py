@@ -170,16 +170,36 @@ class StockfishEngine:
                 if "score" in info:
                     score = info["score"]
                     if self.show_score:
-                        # Convert the score to a string representation
-                        if score.is_mate():
-                            analysis["score"] = f"Mate in {score.mate()}"
-                        else:
-                            # Convert centipawns to pawns
-                            cp_score = score.white().score(mate_score=10000) / 100.0
-                            analysis["score"] = f"{cp_score:+.2f}"
+                        try:
+                            # Convert the score to a string representation
+                            if score.is_mate():
+                                # Handle mate scores safely
+                                mate_score = score.white().mate()
+                                if mate_score is not None:
+                                    analysis["score"] = f"Mate in {mate_score}"
+                                else:
+                                    # Fallback if mate() returns None
+                                    analysis["score"] = "Mate"
+                            else:
+                                # Convert centipawns to pawns
+                                cp_score = score.white().score(mate_score=10000) / 100.0
+                                analysis["score"] = f"{cp_score:+.2f}"
+                        except AttributeError:
+                            # Handle the case where score doesn't have expected methods
+                            try:
+                                # Try a more generic approach
+                                cp_score = score.white().score(mate_score=10000) / 100.0
+                                analysis["score"] = f"{cp_score:+.2f}"
+                            except Exception:
+                                # Last resort fallback
+                                analysis["score"] = "?"
 
                     # Add raw score for sorting/comparison
-                    analysis["raw_score"] = score.white().score(mate_score=10000)
+                    try:
+                        analysis["raw_score"] = score.white().score(mate_score=10000)
+                    except Exception:
+                        # Use a default value if we can't get the raw score
+                        analysis["raw_score"] = 0
 
                 # Get the principal variation (PV)
                 if "pv" in info:
