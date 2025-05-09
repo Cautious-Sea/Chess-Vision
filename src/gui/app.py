@@ -83,18 +83,22 @@ class ChessVisionApp(QMainWindow):
         # Create the piece palette
         self.piece_palette = ChessPiecePalette()
 
-        # Create a vertical layout for the board and piece palette
-        board_palette_layout = QVBoxLayout()
+        # Create a layout for the left side (board + palette)
+        left_side_layout = QVBoxLayout()
+        left_side_layout.setSpacing(0)  # Reduce spacing
 
         # Add the board to the layout (giving it most of the space)
-        board_palette_layout.addWidget(self.board_view, 15)
+        left_side_layout.addWidget(self.board_view, 8)
 
         # Add the piece palette to the layout (giving it minimal space)
-        board_palette_layout.addWidget(self.piece_palette, 1)
-        board_palette_layout.setSpacing(0)  # Reduce spacing between board and palette
+        left_side_layout.addWidget(self.piece_palette, 1)
 
-        # Add the board+palette layout and control panel to the main horizontal layout
-        self.board_controls_layout.addLayout(board_palette_layout, 3)  # Reduced from 4 to give more space to control panel
+        # Create a widget to hold the left side layout
+        left_side_widget = QWidget()
+        left_side_widget.setLayout(left_side_layout)
+
+        # Add the left side widget and control panel to the main horizontal layout
+        self.board_controls_layout.addWidget(left_side_widget, 3)
         self.board_controls_layout.addWidget(self.control_panel, 1)
 
         # Add the board controls layout to the main layout
