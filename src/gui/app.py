@@ -38,7 +38,7 @@ class ChessVisionApp(QMainWindow):
 
         # Set up the window
         self.setWindowTitle("Chess Vision")
-        self.setMinimumSize(900, 650)  # Increased window size
+        self.setMinimumSize(900, 750)  # Increased window size to accommodate the piece palette
 
         # Set up the central widget and layout
         self.central_widget = QWidget()
@@ -87,11 +87,11 @@ class ChessVisionApp(QMainWindow):
         self.board_controls_layout.addWidget(self.board_view, 4)
         self.board_controls_layout.addWidget(self.control_panel, 1)
 
-        # Add the board controls layout to the main layout
-        self.main_layout.addLayout(self.board_controls_layout, 1)
+        # Add the board controls layout to the main layout (giving it more space)
+        self.main_layout.addLayout(self.board_controls_layout, 10)
 
-        # Add the piece palette to the main layout
-        self.main_layout.addWidget(self.piece_palette, 0)
+        # Add the piece palette to the main layout (giving it less space but enough to be visible)
+        self.main_layout.addWidget(self.piece_palette, 1)
 
         # Set up the board with the initial position
         self.board_view.set_board(chess.Board())

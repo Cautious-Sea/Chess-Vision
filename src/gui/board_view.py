@@ -75,6 +75,7 @@ class ChessBoardView(QWidget):
         # Set up the widget
         self.setMinimumSize(self.board_size, self.board_size)
         self.setMaximumSize(self.board_size, self.board_size)
+        self.setFixedSize(self.board_size, self.board_size)  # Ensure the board maintains its size
         self.setMouseTracking(True)  # Enable mouse tracking for hover effects
 
         # Enable focus to receive key events

@@ -7,7 +7,7 @@ This module provides a widget for selecting chess pieces to place on the board.
 import os
 from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QMimeData
 from PyQt5.QtGui import QPainter, QColor, QPixmap, QPen, QDrag
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, QSizePolicy
 
 
 class ChessPiecePalette(QWidget):
@@ -23,19 +23,25 @@ class ChessPiecePalette(QWidget):
         self.piece_images = {}
 
         # Set up the palette size
-        self.piece_size = 40  # Size of each piece in the palette
+        self.piece_size = 60  # Size of each piece in the palette (increased from 40)
         self.padding = 5      # Padding between pieces
 
-        # Set up the pieces to display
-        self.pieces = ['K', 'Q', 'R', 'B', 'N', 'P', 'k', 'q', 'r', 'b', 'n', 'p', 'X']  # X is for clear square
+        # Set up the pieces to display in two rows
+        self.white_pieces = ['K', 'Q', 'R', 'B', 'N', 'P']  # White pieces (first row)
+        self.black_pieces = ['k', 'q', 'r', 'b', 'n', 'p']  # Black pieces (second row)
+        self.clear_button = 'X'  # Clear square button (added to the end of the second row)
+
+        # Calculate the number of pieces per row and total columns
+        self.pieces_per_row = max(len(self.white_pieces), len(self.black_pieces) + 1)  # +1 for clear button
 
         # Calculate the palette width and height
-        self.palette_width = len(self.pieces) * (self.piece_size + self.padding) + self.padding
-        self.palette_height = self.piece_size + 2 * self.padding
+        self.palette_width = self.pieces_per_row * (self.piece_size + self.padding) + self.padding
+        self.palette_height = 2 * (self.piece_size + self.padding) + self.padding  # Two rows
 
         # Set up the widget
         self.setMinimumSize(self.palette_width, self.palette_height)
         self.setMaximumHeight(self.palette_height)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
         # Enable focus to receive key events
         self.setFocusPolicy(Qt.StrongFocus)
@@ -83,37 +89,24 @@ class ChessPiecePalette(QWidget):
         # Draw the background
         painter.fillRect(0, 0, self.width(), self.height(), QColor(240, 240, 240))
 
-        # Draw each piece
+        # Draw white pieces (first row)
         x = self.padding
         y = self.padding
 
-        for piece_symbol in self.pieces:
-            # Special case for the clear square button
-            if piece_symbol == 'X':
-                # Draw a red X for the clear square button
-                painter.setPen(Qt.black)
-                painter.setBrush(QColor(240, 240, 240))
-                painter.drawRect(x, y, self.piece_size, self.piece_size)
-
-                # Draw the X
-                painter.setPen(QPen(Qt.red, 2))
-                painter.drawLine(x + 5, y + 5, x + self.piece_size - 5, y + self.piece_size - 5)
-                painter.drawLine(x + self.piece_size - 5, y + 5, x + 5, y + self.piece_size - 5)
-            # Draw the piece if we have an image for it
-            elif piece_symbol in self.piece_images:
-                painter.drawPixmap(x, y, self.piece_images[piece_symbol])
-            else:
-                # Fallback: draw a colored rectangle with the piece symbol
-                color = Qt.white if piece_symbol.isupper() else Qt.black
-                painter.setPen(Qt.black)
-                painter.setBrush(QColor(200, 200, 200, 100))
-                painter.drawRect(x, y, self.piece_size, self.piece_size)
-                painter.setPen(color)
-                painter.drawText(QRect(x, y, self.piece_size, self.piece_size),
-                                Qt.AlignCenter, piece_symbol)
-
-            # Move to the next piece position
+        for piece_symbol in self.white_pieces:
+            self._draw_piece(painter, piece_symbol, x, y)
             x += self.piece_size + self.padding
+
+        # Draw black pieces and clear button (second row)
+        x = self.padding
+        y += self.piece_size + self.padding
+
+        for piece_symbol in self.black_pieces:
+            self._draw_piece(painter, piece_symbol, x, y)
+            x += self.piece_size + self.padding
+
+        # Draw the clear square button at the end of the second row
+        self._draw_clear_button(painter, x, y)
 
     def mousePressEvent(self, event):
         """Handle mouse press events for piece selection."""
@@ -163,24 +156,58 @@ class ChessPiecePalette(QWidget):
         # We don't need to do anything here since we're using QDrag
         pass
 
+    def _draw_piece(self, painter, piece_symbol, x, y):
+        """Draw a chess piece at the specified position."""
+        if piece_symbol in self.piece_images:
+            painter.drawPixmap(x, y, self.piece_images[piece_symbol])
+        else:
+            # Fallback: draw a colored rectangle with the piece symbol
+            color = Qt.white if piece_symbol.isupper() else Qt.black
+            painter.setPen(Qt.black)
+            painter.setBrush(QColor(200, 200, 200, 100))
+            painter.drawRect(x, y, self.piece_size, self.piece_size)
+            painter.setPen(color)
+            painter.drawText(QRect(x, y, self.piece_size, self.piece_size),
+                            Qt.AlignCenter, piece_symbol)
+
+    def _draw_clear_button(self, painter, x, y):
+        """Draw the clear square button at the specified position."""
+        # Draw a red X for the clear square button
+        painter.setPen(Qt.black)
+        painter.setBrush(QColor(240, 240, 240))
+        painter.drawRect(x, y, self.piece_size, self.piece_size)
+
+        # Draw the X
+        painter.setPen(QPen(Qt.red, 2))
+        painter.drawLine(x + 5, y + 5, x + self.piece_size - 5, y + self.piece_size - 5)
+        painter.drawLine(x + self.piece_size - 5, y + 5, x + 5, y + self.piece_size - 5)
+
     def _piece_at_position(self, pos):
         """Get the piece at the given position."""
+        # Calculate the row and column
+        row = (pos.y() - self.padding) // (self.piece_size + self.padding)
+        col = (pos.x() - self.padding) // (self.piece_size + self.padding)
+
         # Check if the position is within the palette
-        if pos.y() < self.padding or pos.y() >= self.padding + self.piece_size:
+        if row < 0 or row >= 2 or col < 0 or col >= self.pieces_per_row:
             return None
 
-        # Calculate the piece index
-        x = pos.x() - self.padding
-        piece_index = x // (self.piece_size + self.padding)
+        # Check if the position is within a piece
+        piece_x = self.padding + col * (self.piece_size + self.padding)
+        piece_y = self.padding + row * (self.piece_size + self.padding)
 
-        # Check if the index is valid
-        if piece_index < 0 or piece_index >= len(self.pieces):
+        if pos.x() < piece_x or pos.x() >= piece_x + self.piece_size or \
+           pos.y() < piece_y or pos.y() >= piece_y + self.piece_size:
             return None
 
-        # Check if the position is within the piece
-        piece_x = self.padding + piece_index * (self.piece_size + self.padding)
-        if pos.x() < piece_x or pos.x() >= piece_x + self.piece_size:
-            return None
+        # Determine which piece is at this position
+        if row == 0:  # First row (white pieces)
+            if col < len(self.white_pieces):
+                return self.white_pieces[col]
+        else:  # Second row (black pieces and clear button)
+            if col < len(self.black_pieces):
+                return self.black_pieces[col]
+            elif col == len(self.black_pieces):
+                return self.clear_button
 
-        # Return the piece symbol
-        return self.pieces[piece_index]
+        return None
