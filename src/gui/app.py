@@ -73,9 +73,14 @@ class ChessVisionApp(QMainWindow):
         self.current_image = None
         self.last_fen = None
         self.pending_fen = None
+        self.auto_update_enabled = False  # Flag to track if auto-update is enabled
 
         # Set up board state tracking
         self.previous_board = chess.Board()  # Track the previous board state
+
+        # Set up board state history for undo/redo
+        self.board_history = []  # Stack of previous board states for undo
+        self.redo_stack = []     # Stack of undone board states for redo
 
         # Create the control panel
         self.control_panel = self._create_control_panel()
@@ -121,11 +126,11 @@ class ChessVisionApp(QMainWindow):
         position_group = QGroupBox("Position")
         position_layout = QVBoxLayout(position_group)
         position_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
-        position_layout.setSpacing(3)  # Reduce spacing
+        position_layout.setSpacing(8)  # Increase spacing
 
         # FEN input - more compact layout
         fen_layout = QHBoxLayout()
-        fen_layout.setSpacing(3)
+        fen_layout.setSpacing(3)  # Reduce spacing
         fen_label = QLabel("FEN:")
         self.fen_input = QLineEdit()
         self.fen_input.setText(chess.STARTING_FEN)
@@ -135,7 +140,7 @@ class ChessVisionApp(QMainWindow):
 
         # Button layout - horizontal to save space
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(3)
+        button_layout.setSpacing(3)  # Reduce spacing
 
         # Set position button
         set_position_button = QPushButton("Set Position")
@@ -152,9 +157,25 @@ class ChessVisionApp(QMainWindow):
         button_layout.addWidget(reset_button)
         button_layout.addStretch(1)
 
+        # Auto-update button layout
+        auto_update_layout = QHBoxLayout()
+        auto_update_layout.setSpacing(3)  # Reduce spacing
+
+        # Auto-update button
+        self.auto_update_button = QPushButton("Auto Update: OFF")
+        self.auto_update_button.clicked.connect(self._on_toggle_auto_update)
+        self.auto_update_button.setMaximumWidth(120)
+
+        # Add auto-update button to layout
+        auto_update_layout.addWidget(self.auto_update_button)
+        auto_update_layout.addStretch(1)
+
         # Add widgets to position layout
         position_layout.addLayout(fen_layout)
         position_layout.addLayout(button_layout)
+        position_layout.addLayout(auto_update_layout)
+
+
 
         # Analysis group
         analysis_group = QGroupBox("Analysis")
@@ -166,11 +187,11 @@ class ChessVisionApp(QMainWindow):
         self.analysis_label = QLabel("No analysis available")
         self.analysis_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.analysis_label.setWordWrap(True)
-        self.analysis_label.setMinimumHeight(100)  # Increased height a bit
+        self.analysis_label.setMinimumHeight(80)  # Reduced height
 
         # Analysis options
         options_layout = QHBoxLayout()
-        options_layout.setSpacing(3)
+        options_layout.setSpacing(3)  # Reduce spacing
 
         # Depth selection
         depth_label = QLabel("Depth:")
@@ -205,24 +226,13 @@ class ChessVisionApp(QMainWindow):
         analysis_layout.addLayout(options_layout)
         analysis_layout.addWidget(self.analysis_button, 0, Qt.AlignLeft)  # Align left
 
-        # Move history group
-        history_group = QGroupBox("Move History")
-        history_layout = QVBoxLayout(history_group)
-        history_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
 
-        # Move history display
-        self.history_label = QLabel("No moves yet")
-        self.history_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.history_label.setWordWrap(True)
-        self.history_label.setMinimumHeight(80)  # Reduced height
-
-        # Add widgets to history layout
-        history_layout.addWidget(self.history_label)
 
         # Screen selection group
         screen_group = QGroupBox("Screen Selection")
         screen_layout = QVBoxLayout(screen_group)
         screen_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+        screen_layout.setSpacing(3)  # Reduce spacing
 
         # Selection status
         self.selection_label = QLabel("No region selected")
@@ -242,6 +252,7 @@ class ChessVisionApp(QMainWindow):
         detection_group = QGroupBox("Detection")
         detection_layout = QVBoxLayout(detection_group)
         detection_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+        detection_layout.setSpacing(3)  # Reduce spacing
 
         # Detection status
         self.detection_label = QLabel("Detection not running")
@@ -268,13 +279,36 @@ class ChessVisionApp(QMainWindow):
         board_controls_group = QGroupBox("Board Controls")
         board_controls_layout = QVBoxLayout(board_controls_group)
         board_controls_layout.setContentsMargins(5, 10, 5, 5)  # Reduce margins
+        board_controls_layout.setSpacing(3)  # Reduce spacing
 
         # Flip board button
         flip_board_button = QPushButton("Flip Board")
         flip_board_button.clicked.connect(self._on_flip_board)
 
+        # Undo/Redo buttons layout
+        undo_redo_layout = QHBoxLayout()
+        undo_redo_layout.setSpacing(3)
+
+        # Undo button
+        self.undo_button = QPushButton("Undo")
+        self.undo_button.clicked.connect(self._on_undo)
+        self.undo_button.setMaximumWidth(80)
+        self.undo_button.setEnabled(False)  # Disabled initially
+
+        # Redo button
+        self.redo_button = QPushButton("Redo")
+        self.redo_button.clicked.connect(self._on_redo)
+        self.redo_button.setMaximumWidth(80)
+        self.redo_button.setEnabled(False)  # Disabled initially
+
+        # Add undo/redo buttons to layout
+        undo_redo_layout.addWidget(self.undo_button)
+        undo_redo_layout.addWidget(self.redo_button)
+        undo_redo_layout.addStretch(1)
+
         # Turn selector
         turn_layout = QHBoxLayout()
+        turn_layout.setSpacing(3)
         turn_label = QLabel("Turn:")
 
         # Create radio buttons for white and black
@@ -293,15 +327,15 @@ class ChessVisionApp(QMainWindow):
 
         # Add widgets to board controls layout
         board_controls_layout.addWidget(flip_board_button)
+        board_controls_layout.addLayout(undo_redo_layout)
         board_controls_layout.addLayout(turn_layout)
 
-        # Add groups to main layout
-        layout.addWidget(position_group)
-        layout.addWidget(board_controls_group)
-        layout.addWidget(analysis_group)
-        layout.addWidget(history_group)
-        layout.addWidget(screen_group)
-        layout.addWidget(detection_group)
+        # Add groups to main layout in the specified order
+        layout.addWidget(position_group)        # 1. Position Section
+        layout.addWidget(board_controls_group)  # 2. Board Controls
+        layout.addWidget(analysis_group)        # 3. Analysis
+        layout.addWidget(screen_group)          # 4. Screen Selection
+        layout.addWidget(detection_group)       # 5. Detections
         layout.addStretch(1)
 
         # Set a fixed width for the panel
@@ -320,6 +354,12 @@ class ChessVisionApp(QMainWindow):
         print(f"Setting position from FEN: {fen}")
 
         try:
+            # Save the current board state for undo
+            self.board_history.append(self.board_view.board.copy())
+
+            # Clear the redo stack since we're making a new change
+            self.redo_stack.clear()
+
             # Create a new board from the FEN
             new_board = chess.Board(fen)
 
@@ -331,13 +371,18 @@ class ChessVisionApp(QMainWindow):
 
             # Reset the move history
             self.move_history = []
-            self.history_label.setText("No moves yet")
 
             # Update the turn radio buttons
             self._update_turn_radio_buttons()
 
             # Store this as the last valid FEN
             self.last_fen = fen
+
+            # Enable the undo button
+            self.undo_button.setEnabled(True)
+
+            # Disable the redo button since we've made a new change
+            self.redo_button.setEnabled(False)
 
             print(f"Successfully set position from FEN: {fen}")
 
@@ -360,6 +405,12 @@ class ChessVisionApp(QMainWindow):
 
     def _on_reset(self):
         """Handle the Reset button click."""
+        # Save the current board state for undo
+        self.board_history.append(self.board_view.board.copy())
+
+        # Clear the redo stack since we're making a new change
+        self.redo_stack.clear()
+
         # Create a new board with the starting position
         new_board = chess.Board()
 
@@ -373,10 +424,16 @@ class ChessVisionApp(QMainWindow):
         self.fen_input.setText(chess.STARTING_FEN)
 
         # Reset the move history
-        self.history_label.setText("No moves yet")
+        self.move_history = []
 
         # Update the turn radio buttons
         self._update_turn_radio_buttons()
+
+        # Enable the undo button
+        self.undo_button.setEnabled(True)
+
+        # Disable the redo button since we've made a new change
+        self.redo_button.setEnabled(False)
 
     def _on_toggle_analysis(self):
         """Toggle analysis on/off."""
@@ -566,6 +623,87 @@ class ChessVisionApp(QMainWindow):
         else:
             print("Board flipped: White pieces at bottom")
 
+    def _on_undo(self):
+        """Handle the Undo button click."""
+        if not self.board_history:
+            print("No moves to undo")
+            return
+
+        # Get the current board state for potential redo
+        current_board = self.board_view.board.copy()
+
+        # Add current state to redo stack
+        self.redo_stack.append(current_board)
+
+        # Get the previous board state
+        previous_board = self.board_history.pop()
+
+        # Update the board view
+        self.board_view.set_board(previous_board)
+
+        # Update the previous board state
+        self.previous_board = previous_board.copy()
+
+        # Update the FEN input field
+        self.fen_input.setText(previous_board.fen())
+
+        # Update the turn radio buttons
+        self._update_turn_radio_buttons()
+
+        # Update button states
+        self.redo_button.setEnabled(True)
+        self.undo_button.setEnabled(len(self.board_history) > 0)
+
+        print("Undid last move/action")
+
+    def _on_redo(self):
+        """Handle the Redo button click."""
+        if not self.redo_stack:
+            print("No moves to redo")
+            return
+
+        # Get the current board state for undo
+        current_board = self.board_view.board.copy()
+
+        # Add current state to undo stack
+        self.board_history.append(current_board)
+
+        # Get the next board state
+        next_board = self.redo_stack.pop()
+
+        # Update the board view
+        self.board_view.set_board(next_board)
+
+        # Update the previous board state
+        self.previous_board = next_board.copy()
+
+        # Update the FEN input field
+        self.fen_input.setText(next_board.fen())
+
+        # Update the turn radio buttons
+        self._update_turn_radio_buttons()
+
+        # Update button states
+        self.undo_button.setEnabled(True)
+        self.redo_button.setEnabled(len(self.redo_stack) > 0)
+
+        print("Redid last undone move/action")
+
+    def _on_toggle_auto_update(self):
+        """Toggle auto-update on/off."""
+        self.auto_update_enabled = not self.auto_update_enabled
+
+        if self.auto_update_enabled:
+            self.auto_update_button.setText("Auto Update: ON")
+            print("Auto update enabled")
+
+            # If we have a last_fen, update the board immediately
+            if self.last_fen:
+                self._auto_update_board(self.last_fen)
+        else:
+            self.auto_update_button.setText("Auto Update: OFF")
+            print("Auto update disabled")
+
     def _on_turn_changed(self):
         """Handle changes to the turn selector."""
         # Check which radio button is checked
@@ -628,6 +766,12 @@ class ChessVisionApp(QMainWindow):
         if square is not None:
             print(f"Square: {chess.square_name(square)}")
 
+            # Save the current board state for undo
+            self.board_history.append(self.board_view.board.copy())
+
+            # Clear the redo stack since we're making a new change
+            self.redo_stack.clear()
+
             # Create a copy of the current board
             new_board = self.board_view.board.copy()
 
@@ -657,6 +801,12 @@ class ChessVisionApp(QMainWindow):
             # Update the turn radio buttons
             self._update_turn_radio_buttons()
 
+            # Enable the undo button
+            self.undo_button.setEnabled(True)
+
+            # Disable the redo button since we've made a new change
+            self.redo_button.setEnabled(False)
+
             print(f"Piece {piece_symbol} placed at {chess.square_name(square)}")
         else:
             print("Drop position is not on a valid square")
@@ -667,6 +817,12 @@ class ChessVisionApp(QMainWindow):
             print(f"Resetting to detected position: {self.last_fen}")
 
             try:
+                # Save the current board state for undo
+                self.board_history.append(self.board_view.board.copy())
+
+                # Clear the redo stack since we're making a new change
+                self.redo_stack.clear()
+
                 # Create a new board from the FEN
                 new_board = chess.Board(self.last_fen)
 
@@ -680,10 +836,16 @@ class ChessVisionApp(QMainWindow):
                 self.fen_input.setText(self.last_fen)
 
                 # Reset the move history
-                self.history_label.setText("No moves yet")
+                self.move_history = []
 
                 # Update the turn radio buttons
                 self._update_turn_radio_buttons()
+
+                # Enable the undo button
+                self.undo_button.setEnabled(True)
+
+                # Disable the redo button since we've made a new change
+                self.redo_button.setEnabled(False)
 
                 # Show a confirmation message
                 QMessageBox.information(
@@ -954,7 +1116,8 @@ class ChessVisionApp(QMainWindow):
 
         This method is designed to be called from the main UI thread
         to update the FEN input field with a new FEN string from detection.
-        The board is not updated until the user clicks "Set Position".
+        If auto-update is enabled, it will also update the board.
+        Otherwise, the board is not updated until the user clicks "Set Position".
         """
         print(f"Updating FEN input field with: {fen}")
 
@@ -969,8 +1132,76 @@ class ChessVisionApp(QMainWindow):
             self.last_fen = fen
 
             print(f"FEN input field updated with: {fen}")
+
+            # If auto-update is enabled, update the board as well
+            if self.auto_update_enabled:
+                self._auto_update_board(fen)
+
         except Exception as e:
             print(f"Error updating FEN input field: {e}")
+
+    def _auto_update_board(self, fen):
+        """
+        Automatically update the board with the detected FEN string.
+
+        This method updates the board and handles the turn correctly based on
+        the changes between the previous board state and the new FEN.
+        """
+        print(f"Auto-updating board with FEN: {fen}")
+
+        try:
+            # Save the current board state for undo
+            self.board_history.append(self.board_view.board.copy())
+
+            # Clear the redo stack since we're making a new change
+            self.redo_stack.clear()
+
+            # Create a new board from the FEN
+            new_board = chess.Board(fen)
+
+            # Try to find what move was made
+            move = self._find_move_between_positions(self.previous_board, new_board)
+
+            if move:
+                # A move was found, apply it to the previous board
+                print(f"Detected move: {self.previous_board.san(move)}")
+
+                # Make the move on the previous board
+                self.previous_board.push(move)
+
+                # Use the updated previous board (which has the correct turn)
+                self.board_view.set_board(self.previous_board)
+
+                # Add the move to the history
+                self.add_move_to_history(self.previous_board.san(move))
+
+                # Update the FEN input field with the current board FEN
+                self.fen_input.setText(self.previous_board.fen())
+
+                print(f"Board auto-updated with move: {self.previous_board.san(move)}")
+            else:
+                # No move was found, just set the board directly
+                print("No move detected, setting board directly")
+
+                # Update the previous board
+                self.previous_board = new_board.copy()
+
+                # Use the set_board method to update the board
+                self.board_view.set_board(new_board)
+
+                print(f"Board directly auto-updated with FEN: {fen}")
+
+            # Update the turn radio buttons
+            self._update_turn_radio_buttons()
+
+            # Enable the undo button
+            self.undo_button.setEnabled(True)
+
+            # Disable the redo button since we've made a new change
+            self.redo_button.setEnabled(False)
+
+        except Exception as e:
+            print(f"Error auto-updating board: {e}")
 
     def _safe_update_board(self, fen):
         """
@@ -1053,6 +1284,12 @@ class ChessVisionApp(QMainWindow):
         """
         print(f"Move made: {san}")
 
+        # Save the previous board state for undo
+        self.board_history.append(self.previous_board.copy())
+
+        # Clear the redo stack since we're making a new move
+        self.redo_stack.clear()
+
         # Add the move to the history
         self.add_move_to_history(san)
 
@@ -1064,6 +1301,12 @@ class ChessVisionApp(QMainWindow):
 
         # Update the previous board state
         self.previous_board = self.board_view.board.copy()
+
+        # Enable the undo button
+        self.undo_button.setEnabled(True)
+
+        # Disable the redo button since we've made a new move
+        self.redo_button.setEnabled(False)
 
     def add_move_to_history(self, move_san):
         """
@@ -1085,8 +1328,8 @@ class ChessVisionApp(QMainWindow):
         if len(self.move_history) > 10:
             self.move_history = self.move_history[-10:]
 
-        # Update the history display
-        self.history_label.setText("\n".join(self.move_history))
+        # Print move to console for debugging
+        print(f"Move added to history: {move_san}")
 
     def _update_turn_radio_buttons(self):
         """Update the turn radio buttons based on the current board state."""

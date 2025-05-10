@@ -15,7 +15,7 @@ class FENGenerator:
     generating FEN notation for the detected position.
     """
 
-    def __init__(self, board_size=(380, 380)):
+    def __init__(self, board_size=(395, 395)):
         """
         Initialize the FEN generator.
 

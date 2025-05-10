@@ -19,11 +19,11 @@ class ScreenSelector(QDialog):
     """
     A dialog for selecting a region of the screen.
 
-    This dialog allows the user to select a fixed-size region (380x380 pixels)
+    This dialog allows the user to select a fixed-size region (395x395 pixels)
     of the screen for chess board detection.
     """
 
-    def __init__(self, parent=None, selection_size=(380, 380)):
+    def __init__(self, parent=None, selection_size=(395, 395)):
         """
         Initialize the screen selector.
 
@@ -210,7 +210,7 @@ class ScreenSelector(QDialog):
         )
 
 
-def select_screen_region(parent=None, selection_size=(380, 380)):
+def select_screen_region(parent=None, selection_size=(395, 395)):
     """
     Show the screen selector dialog and return the selected region.
 

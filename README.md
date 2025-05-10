@@ -65,7 +65,7 @@ Chess Vision monitors a selected region of your screen where a chess game is bei
    python main.py
    ```
 
-3. Use the selection tool to define the 380x380 chess board region on your screen
+3. Use the selection tool to define the 395x395 chess board region on your screen
 
 4. The application will begin monitoring the selected region and display the detected position in the chess GUI
 
@@ -95,7 +95,7 @@ Chess-Vision/
 ### Modules
 
 1. **Screen Selection Module**
-   - Allows users to select a 380x380 region of the screen
+   - Allows users to select a 395x395 region of the screen
    - Saves coordinates for continuous monitoring
 
 2. **Chess Detection Module**
