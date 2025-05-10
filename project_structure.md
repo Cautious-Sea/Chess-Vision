@@ -77,7 +77,7 @@ Chess-Vision/
 The entry point for the application that initializes and coordinates all modules.
 
 ### Screen Module (`src/screen/`)
-- `selector.py`: Implements the UI for selecting a 380x380 region of the screen
+- `selector.py`: Implements the UI for selecting a 395x395 region of the screen
 - `capture.py`: Handles capturing the selected region at regular intervals
 
 ### Detection Module (`src/detection/`)

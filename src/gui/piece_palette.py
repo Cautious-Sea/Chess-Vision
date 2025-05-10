@@ -23,19 +23,16 @@ class ChessPiecePalette(QWidget):
         self.piece_images = {}
 
         # Set up the palette size
-        self.piece_size = 60  # Restore original piece size
-        self.padding = 5      # Restore original padding
+        self.piece_size = 60  # Size of each piece in the palette (increased from 40)
+        self.padding = 5      # Padding between pieces
 
-        # Set up the pieces to display in two rows, limiting to 4 pieces per row to match board width
-        # This will create two rows with 4 pieces each, plus the clear button
-        self.white_pieces = ['K', 'Q', 'R', 'B']  # White pieces (first row)
-        self.black_pieces = ['k', 'q', 'r', 'b']  # Black pieces (second row)
-        self.second_white_pieces = ['N', 'P']  # Additional white pieces (third row)
-        self.second_black_pieces = ['n', 'p']  # Additional black pieces (third row)
-        self.clear_button = 'X'  # Clear square button (added to the end of the third row)
+        # Set up the pieces to display in two rows
+        self.white_pieces = ['K', 'Q', 'R', 'B', 'N', 'P']  # White pieces (first row)
+        self.black_pieces = ['k', 'q', 'r', 'b', 'n', 'p']  # Black pieces (second row)
+        self.clear_button = 'X'  # Clear square button (added to the end of the second row)
 
-        # Calculate the number of pieces per row (limit to 4 to match board width)
-        self.pieces_per_row = 4  # Limit to 4 pieces per row to match board width
+        # Calculate the number of pieces per row and total columns
+        self.pieces_per_row = max(len(self.white_pieces), len(self.black_pieces) + 1)  # +1 for clear button
 
         # Calculate the palette width and height
         self.palette_width = self.pieces_per_row * (self.piece_size + self.padding) + self.padding
@@ -100,13 +97,16 @@ class ChessPiecePalette(QWidget):
             self._draw_piece(painter, piece_symbol, x, y)
             x += self.piece_size + self.padding
 
-        # Draw black pieces (second row)
+        # Draw black pieces and clear button (second row)
         x = self.padding
         y += self.piece_size + self.padding
 
         for piece_symbol in self.black_pieces:
             self._draw_piece(painter, piece_symbol, x, y)
             x += self.piece_size + self.padding
+
+        # Draw the clear square button at the end of the second row
+        self._draw_clear_button(painter, x, y)
 
     def mousePressEvent(self, event):
         """Handle mouse press events for piece selection."""
@@ -204,8 +204,10 @@ class ChessPiecePalette(QWidget):
         if row == 0:  # First row (white pieces)
             if col < len(self.white_pieces):
                 return self.white_pieces[col]
-        else:  # Second row (black pieces)
+        else:  # Second row (black pieces and clear button)
             if col < len(self.black_pieces):
                 return self.black_pieces[col]
+            elif col == len(self.black_pieces):
+                return self.clear_button
 
         return None
